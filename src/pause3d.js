@@ -3,10 +3,10 @@ import * as THREE from 'three';
 
 const FONT = '"Barlow Condensed", "Segoe UI", Arial, sans-serif';
 const ITEMS = [
-  { id: 'resume',   num: '01', label: 'RESUME',    key: 'ESC' },
-  { id: 'restart',  num: '02', label: 'RESTART',   key: 'R'   },
-  { id: 'settings', num: '03', label: 'SETTINGS',  key: 'G'   },
-  { id: 'menu',     num: '04', label: 'MAIN MENU', key: 'M'   },
+  { id: 'resume',   label: 'Resume',    key: 'Esc' },
+  { id: 'restart',  label: 'Restart',   key: 'R'   },
+  { id: 'settings', label: 'Settings',  key: 'G'   },
+  { id: 'menu',     label: 'Main menu', key: 'M'   },
 ];
 
 // Normalized UV Y-ranges (0 = bottom, 1 = top) for each of the 4 stacked cards
@@ -44,95 +44,71 @@ export function createPauseMenu(stage, onAction) {
   let selected = 0;
   let dirty = true;
 
-  function drawCornerBrackets(x, y, w, h, len, color) {
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2.5;
+  function drawKeycap(keyText, rightX, midY, active) {
+    ctx.font = `600 26px ${FONT}`;
+    const textW = ctx.measureText(keyText).width;
+    const pillW = Math.max(46, Math.ceil(textW + 28));
+    const pillH = 42;
+    const x = rightX - pillW;
+    const y = midY - pillH / 2;
+
+    ctx.strokeStyle = active ? 'rgba(212, 162, 89, 0.65)' : 'rgba(212, 162, 89, 0.35)';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    // top-left
-    ctx.moveTo(x, y + len); ctx.lineTo(x, y); ctx.lineTo(x + len, y);
-    // top-right
-    ctx.moveTo(x + w - len, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + len);
-    // bottom-left
-    ctx.moveTo(x, y + h - len); ctx.lineTo(x, y + h); ctx.lineTo(x + len, y + h);
-    // bottom-right
-    ctx.moveTo(x + w - len, y + h); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w, y + h - len);
+    if (ctx.roundRect) ctx.roundRect(x, y, pillW, pillH, 6);
+    else ctx.rect(x, y, pillW, pillH);
     ctx.stroke();
+
+    ctx.fillStyle = active ? '#efe2c8' : 'rgba(239, 226, 200, 0.52)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(keyText, x + pillW / 2, midY + 1);
   }
 
   function redraw() {
     dirty = false;
     ctx.clearRect(0, 0, W, H);
 
-    // Top tab: "PAUSED ▾" (matching reference image header tab)
-    ctx.fillStyle = 'rgba(13, 17, 26, 0.94)';
-    ctx.fillRect(0, 0, 290, 62);
-    ctx.strokeStyle = 'rgba(212, 162, 89, 0.45)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(1, 1, 288, 60);
-
-    ctx.fillStyle = '#efe2c8';
-    ctx.font = `700 34px ${FONT}`;
+    // Quiet studio header with a subtle brass rule
+    ctx.fillStyle = '#d4a259';
+    ctx.font = `600 28px ${FONT}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '0.16em';
-    ctx.fillText('PAUSED', 24, 33);
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+    ctx.fillText('Paused', 4, 34);
 
-    // Small amber corner triangle on tab
-    ctx.fillStyle = '#d4a259';
-    ctx.beginPath();
-    ctx.moveTo(256, 16); ctx.lineTo(274, 16); ctx.lineTo(274, 34);
-    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(212, 162, 89, 0.28)';
+    ctx.fillRect(0, 66, W, 1);
 
-    // 4 stacked studio cards
-    const padX = 0, cardW = W, cardH = 152, startY = 88, gap = 16;
+    // 4 stacked studio rows matching the Hallmark main menu palette
+    const cardW = W, cardH = 152, startY = 88, gap = 16;
     ITEMS.forEach((item, i) => {
       const y = startY + i * (cardH + gap);
+      const midY = y + cardH / 2;
       const active = i === selected;
 
-      // Card body (high opacity so background monitor doesn't bleed through)
-      ctx.fillStyle = active ? 'rgba(22, 28, 42, 0.97)' : 'rgba(11, 14, 22, 0.94)';
-      ctx.fillRect(padX, y, cardW, cardH);
+      ctx.fillStyle = active ? 'rgba(16, 18, 28, 0.95)' : 'rgba(10, 11, 16, 0.90)';
+      ctx.fillRect(0, y, cardW, cardH);
 
-      // Hairline border + left brass indicator
-      ctx.strokeStyle = active ? 'rgba(212, 162, 89, 0.72)' : 'rgba(239, 226, 200, 0.14)';
-      ctx.lineWidth = active ? 2.5 : 1.5;
-      ctx.strokeRect(padX + 1, y + 1, cardW - 2, cardH - 2);
+      ctx.strokeStyle = active ? 'rgba(139, 124, 255, 0.55)' : 'rgba(239, 226, 200, 0.14)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0.5, y + 0.5, cardW - 1, cardH - 1);
+
       if (active) {
-        ctx.fillStyle = '#d4a259';
-        ctx.fillRect(padX, y, 8, cardH);
+        ctx.save();
+        ctx.fillStyle = '#8b7cff';
+        ctx.shadowColor = 'rgba(139, 124, 255, 0.65)';
+        ctx.shadowBlur = 14;
+        ctx.fillRect(0, y + 24, 6, cardH - 48);
+        ctx.restore();
       }
 
-      // Inner corner bracket ticks (reference look)
-      drawCornerBrackets(padX + 18, y + 16, cardW - 36, cardH - 32, 14,
-        active ? 'rgba(239, 226, 200, 0.75)' : 'rgba(239, 226, 200, 0.25)');
-
-      // Number prefix
-      ctx.fillStyle = active ? '#d4a259' : 'rgba(212, 162, 89, 0.52)';
-      ctx.font = `700 28px ${FONT}`;
+      ctx.fillStyle = active ? '#efe2c8' : 'rgba(239, 226, 200, 0.68)';
+      ctx.font = `700 56px ${FONT}`;
       ctx.textAlign = 'left';
-      ctx.fillText(`${item.num} //`, 46, y + 72);
+      ctx.textBaseline = 'middle';
+      ctx.fillText(item.label, 36, midY + 2);
 
-      // Action label
-      ctx.fillStyle = active ? '#efe2c8' : 'rgba(239, 226, 200, 0.78)';
-      ctx.font = `700 52px ${FONT}`;
-      if ('letterSpacing' in ctx) ctx.letterSpacing = '0.12em';
-      ctx.fillText(item.label, 145, y + 70);
-      if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
-
-      // Right key hint badge
-      ctx.textAlign = 'right';
-      ctx.fillStyle = active ? '#d4a259' : 'rgba(239, 226, 200, 0.42)';
-      ctx.font = `600 26px ui-monospace, Consolas, monospace`;
-      ctx.fillText(`[${item.key}]`, cardW - 44, y + 70);
-
-      // Bottom horizontal progress/accent bar (from reference image)
-      ctx.fillStyle = 'rgba(239, 226, 200, 0.10)';
-      ctx.fillRect(42, y + cardH - 22, cardW - 84, 5);
-      if (active) {
-        ctx.fillStyle = '#efe2c8';
-        ctx.fillRect(42, y + cardH - 22, (cardW - 84) * 0.62, 5);
-      }
+      drawKeycap(item.key, cardW - 36, midY, active);
     });
 
     tex.needsUpdate = true;

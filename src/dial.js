@@ -209,8 +209,8 @@ export function createDial(stage) {
   needlePivot.position.z = 0.118;
   group.add(needlePivot);
 
-  // Light-beam needle: razor-thin white-hot core + built-in silky bloom halo + laser contact hotspot.
-  const BEAM_W = 0.14;
+  // Light-beam needle: razor-thin white-hot core + crisp slim glow + laser contact hotspot.
+  const BEAM_W = 0.082;
   const beamLen = DIAL.TIP_R + 0.04 - (DIAL.HUB_R + 0.02);
   const beamGeo = new THREE.PlaneGeometry(BEAM_W, beamLen).translate(0, DIAL.HUB_R + 0.02 + beamLen / 2, 0);
   const beamMat = new THREE.ShaderMaterial({
@@ -224,15 +224,15 @@ export function createDial(stage) {
       void main() {
         float x = abs(vUv.x - 0.5) * 2.0;              // 0 centre .. 1 edge
         float along = vUv.y;                            // 0 hub .. 1 tip
-        float taper = mix(0.26, 0.12, along);           // slim, tapered laser stylus
-        float core = exp(-pow(x / (taper * 0.11), 2.0));
-        float glowW = exp(-pow(x / (taper * 0.65), 2.0)) * 0.45
-                    + exp(-pow(x / (taper * 2.1), 2.0)) * 0.22;
+        float taper = mix(0.22, 0.10, along);           // razor-slim tapered laser stylus
+        float core = exp(-pow(x / (taper * 0.12), 2.0));
+        float glowW = exp(-pow(x / (taper * 0.65), 2.0)) * 0.36
+                    + exp(-pow(x / (taper * 1.45), 2.0)) * 0.14;
         float tip = smoothstep(0.78, 0.97, along) * (1.0 - smoothstep(0.97, 1.0, along));
         // Laser contact hotspot right where the stylus beam crosses the groove band (along ~ 0.54)
-        float hotspot = exp(-pow((along - 0.54) / 0.11, 2.0)) * exp(-pow(x / 0.26, 2.0)) * 0.65;
+        float hotspot = exp(-pow((along - 0.54) / 0.10, 2.0)) * exp(-pow(x / 0.22, 2.0)) * 0.55;
         float ends = smoothstep(0.0, 0.06, along) * (1.0 - smoothstep(0.985, 1.0, along));
-        vec3 c = uColor * (glowW * 1.35 + tip * 0.95 + core * 0.7 + hotspot * 0.8) + vec3(1.0) * (core * 0.88 + hotspot * 0.55);
+        vec3 c = uColor * (glowW * 1.25 + tip * 0.9 + core * 0.7 + hotspot * 0.8) + vec3(1.0) * (core * 0.88 + hotspot * 0.5);
         gl_FragColor = vec4(c * uIntensity * ends, 1.0);
       }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,

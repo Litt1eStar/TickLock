@@ -64,6 +64,19 @@ This supersedes the lighting, materials, needle and UI details above wherever th
 | Controls | Plain right-aligned letter-spaced labels (PICK / SPEED BOOST (HOLD) / PAUSE); key hints appear on hover |
 | Robustness | When the WebGL context is lost, the page reloads itself |
 
+### 2.2 Single-Pass Performance & Hallmark UI Pass (2026-11-18)
+
+This captures the subsequent hardware optimization and Hallmark UI redesign in code:
+
+- **Single-pass rendering (`src/scene.js`):** `EffectComposer` / `UnrealBloomPass` was removed in favor of direct single-pass `WebGLRenderer` rendering (~83–164 fps on Intel UHD at 165 Hz). Glow comes from additive `Sprite` halos on the desk lamp and ON AIR sign plus additive shaders on the dial and needle (`dial.js`, `fx.js`).
+- **Shader-integrated grade & material conversion:** Contrast and saturation grading runs via `THREE.CustomToneMapping` using the shared `uGrade` uniform injected into materials, while `cheapMaterial()` converts static glTF PBR materials to `MeshLambertMaterial` (dielectrics) or `MeshPhongMaterial` (metals), keeping hand-tuned `MeshPhongMaterial` + micro-normal maps on hero lock parts (`Lock_Body`, `Lock_Shackle`, `Lock_Badge`, `Dial_Bezel`, `Dial_Vinyl`).
+- **Opacity-only CSS atmospheric layers:** Vignette (`--vig`) and miss-red tint (`--red-tint`) render via fixed `#stage::before` / `#stage::after` CSS radial-gradient layers so misses never repaint the canvas or screen.
+- **Slimmer needle (`src/dial.js`):** Narrowed to `BEAM_W = 0.082` with `mix(0.22, 0.10, along)` taper and a contact hotspot where the beam crosses the groove band.
+- **Hallmark UI & 3D Diegetic Surfaces (`index.html`, `src/style.css`, `src/hud.js`, `src/pause3d.js`):**
+  - Boot progress overlay (`#boot`) with real progress for fonts, `studio.glb`, and `renderer.compileAsync`.
+  - Clean left-aligned typographic Main Menu (`Play`, `Leaderboard`, `Settings`) with a needle-violet active bar, **How to play** briefing modal, and letter-wiped `"Press Space to start"` cue (`#ready-cue`), plus ON AIR neon-ignition flicker on run start.
+  - Top-5 daily leaderboard lives on the 3D studio monitor (`hud.setBoard(board)`); full Top-10 podium, avatar picker (`src/avatars.js`), Game Over debrief (`#gameover-panel`), and Settings (`#settings-panel`) follow the CSS token system (`:root`), sentence-case typography, hairline brass rules, and 3D world-space Pause Menu (`src/pause3d.js`).
+
 ## 3. HUD and screens
 
 **Hub label** (a canvas texture on `Dial_Label`): time remaining (big; red and pulsing under 5 s), score, combo ×n and LV n.
@@ -138,15 +151,20 @@ Audio stays as in the game design doc (§9).
 
 | File | Role |
 |---|---|
-| `index.html` | Canvas, HTML overlay, import map pointing to `vendor/three/` |
-| `vendor/three/` | Local Three.js and add-ons, so the booth needs no Wi-Fi |
-| `src/scene.js` | Renderer, camera framing, lights, .glb loading, part lookup by name |
-| `src/dial.js` | Zones, needle, trail, ring flash |
-| `src/hud.js` | Hub and monitor canvas textures |
-| `src/fx.js` | Particles, floating text, shake, glitch, studio reactions |
-| `src/demo.js` | Temporary event driver (keys 1–7) for reviewing the visuals |
+| `index.html` | Canvas stage, HTML UI (boot, menu, start cue, briefing, leaderboard, game over, settings), import map pointing to `vendor/three/` |
+| `vendor/three/` | Local Three.js r187 and add-ons, so the booth needs no Wi-Fi |
+| `src/main.js` | Boot sequence, event bus, menu phase machine, leaderboard & run history, settings, input, frame loop |
+| `src/game.js` | Gameplay state machine, 8-level + endless progression, graze/recovery/flow rules |
+| `src/scene.js` | Single-pass renderer, camera framing, lights, `.glb` loading, `cheapMaterial()`, custom tone-mapped `uGrade`, halos, visual settings |
+| `src/dial.js` | Zones, needle light beam, trail, ring flash |
+| `src/hud.js` | Hub and monitor canvas textures (including idle Top-5 leaderboard on monitor) |
+| `src/fx.js` | Particles, needle sparkles, dust motes, floating text, shake, ON AIR ignition, studio reactions |
+| `src/pause3d.js` | True 3D world-space pause menu (`CanvasTexture` plane + raycast interaction) |
+| `src/audio.js` | WebAudio synthesized tones and feedback per event |
+| `src/avatars.js` | Offline vector SVG avatar library for leaderboard entries |
+| `src/style.css` | Hallmark-compliant tokens (`:root`) and 2D overlay styles |
 
-The game must be served over HTTP (for example `npx serve .`), because browsers block loading the .glb from `file://`.
+The game must be served over HTTP (for example `python -m http.server 8642 --bind 127.0.0.1` or `npx serve .`), because browsers block loading the `.glb` and ES modules from `file://`.
 
 ---
 

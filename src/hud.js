@@ -8,12 +8,6 @@ const C = {
   gold: '#ffb347', blue: '#5fd3ff', emerald: '#42ffa1', magenta: '#a99bff', red: '#ff6a4d', navy: '#15141c',
 };
 
-// Letter-spaced small caps (canvas letterSpacing where supported).
-function spaced(ctx, text, x, y, em = 0.18) {
-  if ('letterSpacing' in ctx) { ctx.letterSpacing = `${em}em`; ctx.fillText(text, x, y); ctx.letterSpacing = '0px'; }
-  else ctx.fillText(text.split('').join(' '), x, y);
-}
-
 // Static slate texture for the hub (drawn once, reused every redraw).
 function slateTexture(size) {
   const c = document.createElement('canvas'); c.width = c.height = size;
@@ -54,7 +48,9 @@ function slateTexture(size) {
 // Hub redraws rarely -> 2x. Monitor uploads at 30 Hz -> 1.5x keeps that upload cheap.
 // Perf: each redraw re-uploads the whole canvas to the GPU, so keep them modest
 // (hub 768², redrawn ~10x/s; monitor 1024x576 at 20 Hz -> ~4x less upload than before).
-const HUB_SCALE = 2, MON_SCALE = 0.75;
+// The hub shows ~180 px tall on a 1080p screen, so 1.25x (640 px square) is still sharper than it is drawn;
+// at 2x it re-uploaded 4 MB to the GPU ten times a second while the clock ran.
+const HUB_SCALE = 1.25, MON_SCALE = 0.75;
 const MONITOR_HZ = 15;
 
 function makeScreen(mesh, w, h, maxAniso, SCALE) {
@@ -91,6 +87,9 @@ export function createHud(parts, maxAniso = 8) {
   mon.tex.colorSpace = THREE.SRGBColorSpace;
   if (parts.Monitor_Screen) parts.Monitor_Screen.material.color.setScalar(0.55);
 
+  const scanTile = document.createElement('canvas'); scanTile.width = 4; scanTile.height = 3;
+  { const g = scanTile.getContext('2d'); g.fillStyle = 'rgba(0,0,0,0.28)'; g.fillRect(0, 0, 4, 1); }
+  const scanlines = mon.ctx.createPattern(scanTile, 'repeat');
   const wave = new Float32Array(56);      // monitor waveform bars
   let energy = 0;                         // spikes on hits
   let glitchT = 0;                        // monitor glitch on miss
@@ -99,13 +98,13 @@ export function createHud(parts, maxAniso = 8) {
 
   function react(evt, d = {}) {
     if (evt === 'hit') energy = Math.min(1.6, energy + (d.perfect ? 1.0 : 0.6));
-    if (evt === 'blue') card = { title: '+2s', sub: 'TIME BONUS', color: C.blue, t: 0, dur: 0.9 };
-    if (evt === 'recovery') card = { title: 'SAVED! +1.2s', sub: `COMBO ×${d.combo} RESCUED`, color: C.emerald, t: 0, dur: 1.1 };
-    if (evt === 'flow') card = { title: 'FLOW STATE', sub: 'SCORE ×1.25 ACTIVE', color: C.gold, t: 0, dur: 1.2 };
-    if (evt === 'graze') card = { title: 'SO CLOSE!', sub: `${d.deg}° ${d.timing} · −0.4s`, color: C.gold, t: 0, dur: 0.75 };
-    if (evt === 'levelup') card = { title: `LEVEL ${d.level}`, sub: '+2s', color: C.gold, t: 0, dur: 1.3 };
+    if (evt === 'blue') card = { title: '+2s', sub: 'Time bonus', color: C.blue, t: 0, dur: 0.9 };
+    if (evt === 'recovery') card = { title: 'Saved! +1.2s', sub: `Combo ×${d.combo} rescued`, color: C.emerald, t: 0, dur: 1.1 };
+    if (evt === 'flow') card = { title: 'Flow state', sub: 'Score ×1.25 active', color: C.gold, t: 0, dur: 1.2 };
+    if (evt === 'graze') card = { title: 'So close!', sub: `${d.deg}° ${d.timing} · −0.4s`, color: C.gold, t: 0, dur: 0.75 };
+    if (evt === 'levelup') card = { title: `Level ${d.level}`, sub: '+2s', color: C.gold, t: 0, dur: 1.3 };
     if (evt === 'miss') { glitchT = 0.3; energy = 0; }
-    if (evt === 'fatal') { glitchT = 0.45; card = { title: 'LOCKED!', sub: d.text || 'TIME UP', color: C.red, t: 0, dur: 0.9 }; }
+    if (evt === 'fatal') { glitchT = 0.45; card = { title: 'Locked out', sub: d.text || 'Time up', color: C.red, t: 0, dur: 0.9 }; }
     if (evt === 'start' || evt === 'title') { card = null; glitchT = 0; }
   }
 
@@ -129,16 +128,16 @@ export function createHud(parts, maxAniso = 8) {
       ctx.fillText(fmt(s.best), R, 282);
     } else if (s.mode === 'over') {
       ctx.fillStyle = C.red; ctx.font = `700 88px ${FONT}`;
-      spaced(ctx, 'LOCKED OUT', R, 192, 0.04);
+      ctx.fillText('Locked out', R, 192);
       if (s.fatalText) {
-        ctx.fillStyle = C.gold; ctx.font = `600 26px ${FONT}`;
-        spaced(ctx, s.fatalText, R, 250, 0.1);
+        ctx.fillStyle = C.gold; ctx.font = `600 28px ${FONT}`;
+        ctx.fillText(s.fatalText, R, 250);
       }
-      ctx.fillStyle = C.dim; ctx.font = `600 26px ${FONT}`;
-      spaced(ctx, 'SCORE', R, 296);
+      ctx.fillStyle = C.dim; ctx.font = `600 28px ${FONT}`;
+      ctx.fillText('Score', R, 296);
       ctx.fillStyle = C.cream; ctx.font = `700 56px ${FONT}`;
       ctx.fillText(fmt(s.score), R, 340);
-      if (blink && s.retryReady) { ctx.fillStyle = C.magenta; ctx.font = `600 28px ${FONT}`; spaced(ctx, 'SPACE TO RETRY', R, 404); }
+      if (blink && s.retryReady) { ctx.fillStyle = C.magenta; ctx.font = `600 30px ${FONT}`; ctx.fillText('Space to retry', R, 404); }
     } else {
       if (s.flow) {
         ctx.save();
@@ -147,23 +146,23 @@ export function createHud(parts, maxAniso = 8) {
         ctx.beginPath(); ctx.arc(R, R, R - 10, 0, Math.PI * 2); ctx.stroke();
         ctx.restore();
       }
-      // Calm layout: small spaced label, big number, small spaced label, value.
+      // Calm layout: label, big number, label, value.
       const low = s.time < 5;
       const pulse = low ? 1 + 0.05 * Math.sin(clock * 14) : 1;
       ctx.fillStyle = s.freezeT > 0 ? C.red : C.dim; ctx.font = `600 34px ${FONT}`;
-      spaced(ctx, s.freezeT > 0 && s.fatalText ? s.fatalText : 'TIME REMAINING', R, 108, 0.14);
+      ctx.fillText(s.freezeT > 0 && s.fatalText ? s.fatalText : 'Time remaining', R, 108);
       ctx.save(); ctx.translate(R, 212); ctx.scale(pulse, pulse);
       ctx.fillStyle = low ? C.red : C.cream; ctx.font = `600 200px ${FONT}`;
       ctx.fillText(Math.max(0, s.time).toFixed(1), 0, 0);
       ctx.restore();
-      ctx.fillStyle = C.dim; ctx.font = `600 32px ${FONT}`;
-      spaced(ctx, 'SCORE', R, 318);
+      ctx.fillStyle = C.dim; ctx.font = `600 34px ${FONT}`;
+      ctx.fillText('Score', R, 318);
       ctx.fillStyle = C.cream; ctx.font = `600 72px ${FONT}`;
       ctx.fillText(fmt(s.score), R, 368);
       ctx.font = `600 34px ${FONT}`;
       ctx.fillStyle = s.flow ? C.gold : s.combo > 0 ? C.magenta : C.faint;
-      spaced(ctx, s.flow ? `★×${s.combo}` : `×${s.combo}`, R - 64, 424, 0.08);
-      ctx.fillStyle = C.faint; spaced(ctx, `LV ${s.level}`, R + 64, 424, 0.1);
+      ctx.fillText(s.flow ? `Flow ×${s.combo}` : `×${s.combo}`, R - 64, 424);
+      ctx.fillStyle = C.faint; ctx.fillText(`Lv ${s.level}`, R + 64, 424);
 
       // Physical lock-tumbler pins along the bottom arc (level progress toward Level Up)
       const goal = Math.max(1, s.levelGoal || 4);
@@ -196,32 +195,31 @@ export function createHud(parts, maxAniso = 8) {
     ctx.fillStyle = s.mode === 'over' ? '#1a0d14' : '#0e1424';
     ctx.fillRect(0, 0, W, H);
 
-    // scanlines
-    ctx.fillStyle = 'rgba(0,0,0,0.28)';
-    for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+    // scanlines (one cached pattern fill instead of 192 rects per redraw)
+    ctx.fillStyle = scanlines; ctx.fillRect(0, 0, W, H);
 
     ctx.textBaseline = 'middle';
     if (s.mode === 'title') { drawBoard(ctx, W); mon.tex.needsUpdate = true; return; }
 
-    // top bar while recording: REC + timecode
+    // top bar while recording: Rec + timecode
     const recOn = s.mode === 'play' ? Math.floor(clock * 1.6) % 2 === 0 : true;
     ctx.fillStyle = recOn ? C.red : 'rgba(255,59,59,0.25)';
     ctx.beginPath(); ctx.arc(48, 46, 13, 0, Math.PI * 2); ctx.fill();
-    ctx.textAlign = 'left'; ctx.font = `800 30px ${FONT}`; ctx.fillStyle = C.cream;
-    ctx.fillText(s.mode === 'play' ? 'REC' : 'STBY', 72, 47);
+    ctx.textAlign = 'left'; ctx.font = `700 30px ${FONT}`; ctx.fillStyle = C.cream;
+    ctx.fillText(s.mode === 'play' ? 'Rec' : 'Stby', 72, 47);
     ctx.font = `600 30px ui-monospace, Consolas, monospace`; ctx.fillStyle = C.dim;
     ctx.fillText(timecode(s.runTime), 150, 47);
 
     ctx.textAlign = 'center';
     if (s.mode === 'over') {
-      ctx.fillStyle = C.red; ctx.font = `900 92px ${FONT}`;
-      ctx.fillText('LOCKED OUT', W / 2, 160);
-      const rows = [['SCORE', fmt(s.score)], ['LEVEL', s.level], ['HITS', s.hits], ['PERFECT', s.perfects], ['BEST', fmt(s.best)]];
+      ctx.fillStyle = C.red; ctx.font = `700 92px ${FONT}`;
+      ctx.fillText('Locked out', W / 2, 160);
+      const rows = [['Score', fmt(s.score)], ['Level', s.level], ['Hits', s.hits], ['Perfect', s.perfects], ['Best', fmt(s.best)]];
       ctx.font = `700 36px ${FONT}`;
       rows.forEach(([k, v], i) => {
         const y = 250 + i * 54;
         ctx.textAlign = 'left'; ctx.fillStyle = C.dim; ctx.fillText(k, 300, y);
-        ctx.textAlign = 'right'; ctx.fillStyle = k === 'BEST' ? C.gold : C.cream; ctx.fillText(String(v), W - 300, y);
+        ctx.textAlign = 'right'; ctx.fillStyle = k === 'Best' ? C.gold : C.cream; ctx.fillText(String(v), W - 300, y);
       });
     } else {
       // waveform
@@ -241,11 +239,11 @@ export function createHud(parts, maxAniso = 8) {
         ctx.fillStyle = grad;
         ctx.fillRect(60 + i * bw + 2, 300 - h / 2, bw - 5, h);
       }
-      ctx.font = `900 64px ${FONT}`;
+      ctx.font = `700 64px ${FONT}`;
       ctx.textAlign = 'left'; ctx.fillStyle = s.flow ? C.gold : s.combo > 0 ? C.magenta : C.faint;
-      ctx.fillText(s.flow ? `★ FLOW ×${s.combo}` : `COMBO ×${s.combo}`, 60, 515);
+      ctx.fillText(s.flow ? `Flow ×${s.combo}` : `Combo ×${s.combo}`, 60, 515);
       ctx.textAlign = 'right'; ctx.fillStyle = C.blue;
-      ctx.fillText(`LV ${s.level}`, W - 60, 515);
+      ctx.fillText(`Level ${s.level}`, W - 60, 515);
     }
 
     // event card (+2s, LEVEL n)
@@ -284,7 +282,8 @@ export function createHud(parts, maxAniso = 8) {
 
   // ---------- monitor on the menu: today's top five, the reason to stay and play
   let board = [];
-  function setBoard(rows) { board = rows.slice(0, 5); monAcc = 1; }
+  let boardVer = 0;
+  function setBoard(rows) { board = rows.slice(0, 5); boardVer++; }
   function drawBoard(ctx, W) {
     const L = 84, Rx = W - 84;
     ctx.textAlign = 'left';
@@ -314,6 +313,7 @@ export function createHud(parts, maxAniso = 8) {
   // Redraw the hub only when what it shows changes; the monitor animates at 30 Hz.
   let hubKey = '';
   let monAcc = 1;
+  let monKey = '';
   function update(dt, s) {
     clock += dt;
     // dim glow during play; results/title cards brighten so they stay readable
@@ -322,12 +322,20 @@ export function createHud(parts, maxAniso = 8) {
       const m = parts.Monitor_Screen.material.color;
       m.setScalar(m.r + (target - m.r) * Math.min(1, dt * 4));
     }
-    const blink = Math.floor(clock * 2.2) % 2;
+    const blink = s.mode === 'over' && s.retryReady ? Math.floor(clock * 2.2) % 2 : 0;   // only "Space to retry" blinks
     const pulse = s.mode === 'play' && s.time < 5 ? Math.floor(clock * 30) : 0;
     const key = `${s.mode}|${s.time.toFixed(1)}|${Math.round(s.score)}|${s.combo}|${s.flow}|${s.levelHits}|${s.levelGoal}|${s.freezeT > 0}|${s.fatalText}|${s.level}|${s.best}|${blink}|${pulse}|${s.retryReady}`;
     if (key !== hubKey) { hubKey = key; drawHub(s); }
+    // The monitor only animates during a run (waveform, cards, glitch). On the menu and results screens it is a
+    // still image, so it redraws (and re-uploads to the GPU) only when what it shows changes.
     monAcc += dt;
-    if (monAcc >= 1 / MONITOR_HZ) { drawMonitor(s, monAcc); monAcc = 0; }
+    const animating = s.mode === 'play' || glitchT > 0;
+    if (animating) {
+      if (monAcc >= 1 / MONITOR_HZ) { drawMonitor(s, monAcc); monAcc = 0; monKey = ''; }
+    } else {
+      const k = s.mode === 'title' ? `t|${boardVer}` : `o|${Math.round(s.score)}|${s.level}|${s.hits}|${s.perfects}|${s.best}|${Math.floor(s.runTime * 30)}`;
+      if (k !== monKey) { monKey = k; drawMonitor(s, monAcc); monAcc = 0; }
+    }
   }
 
   return { update, react, setBoard };

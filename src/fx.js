@@ -56,7 +56,7 @@ function particleBuffers(n) {
 }
 
 export function createFx(stage, dom) {
-  const { scene, camera, parts, lights, glitch, grade, rig, renderer } = stage;
+  const { scene, camera, parts, lights, grade, rig, renderer } = stage;
   const pMat = makeParticleMaterial();
 
   // ---------- event particles + needle sparkles
@@ -208,7 +208,7 @@ export function createFx(stage, dom) {
   scene.add(keyCone);
 
   const st = {
-    pump: 0, shake: 0, glitch: 0, recMiss: 0, camFlash: 0,
+    pump: 0, shake: 0, recMiss: 0, camFlash: 0,
     dim: 0, dimTarget: 0, swell: 0, white: 0, missDip: 0, signFlare: 0, red: 0,
     onAir: 0.12, ignite: 0,   // ON AIR sign: dim on the menu, lit (after a neon flicker) once a run starts
     shackle: SHACKLE_OPEN, shackleFrom: SHACKLE_OPEN, shackleTo: SHACKLE_OPEN, shackleT: 1, shackleDur: 0.3,
@@ -229,7 +229,7 @@ export function createFx(stage, dom) {
         stage.dial.ringFlash(c, d.perfect ? 1 : 0.7, d.angle);
         floatText(`+${Math.round(d.points)}`, d.angle, 1.18, d.perfect ? '#fff1d6' : d.kind === 'recovery' ? '#42ffa1' : '#ffb347');
         if (d.perfect) {
-          floatText('PERFECT', d.angle, 1.42, '#fff1d6', true);
+          floatText('Perfect', d.angle, 1.42, '#fff1d6', true);
           st.camFlash = 1; st.white = 1; st.punch = 1;
           dom.flash.classList.remove('pop'); void dom.flash.offsetWidth; dom.flash.classList.add('pop');
         }
@@ -241,34 +241,34 @@ export function createFx(stage, dom) {
         break;
       case 'recovery':
         burst(d.angle, 0x42ffa1, 55, 2.4);
-        floatText('SAVED! +1.2s', d.angle, 1.48, '#42ffa1', true);
+        floatText('Saved! +1.2s', d.angle, 1.48, '#42ffa1', true);
         st.punch = Math.max(st.punch, 0.85); st.swell = 1;
         break;
       case 'flow':
         burst(d.angle || 0, 0xffb347, 60, 2.3);
-        floatText('FLOW STATE!', 0, 1.52, '#ffb347', true);
+        floatText('Flow state!', 0, 1.52, '#ffb347', true);
         st.swell = 1; st.punch = Math.max(st.punch, 0.75);
         break;
       case 'graze':
         burst(d.angle, 0xff9238, 22, 1.5);
         stage.dial.ringFlash(0xff9238, 0.65);
-        floatText(`SO CLOSE! (${d.deg}° ${d.timing}) −0.4s`, d.angle, 1.24, '#ffb347', true);
+        floatText(`So close! (${d.deg}° ${d.timing}) −0.4s`, d.angle, 1.24, '#ffb347', true);
         st.shake = 0.45; st.red = Math.max(st.red, 0.18);
         break;
       case 'miss': {
         stage.dial.ringFlash(PALETTE.red, 1);
         const detail = d.deg ? `−1.2s (${d.deg}° ${d.timing})` : '−1.2s';
         floatText(detail, d.angle, 1.22, '#ff5a46', true);
-        st.shake = 1; st.glitch = 1; st.recMiss = 1; st.missDip = 1; st.red = Math.max(st.red, 0.35);
+        st.shake = 1; st.recMiss = 1; st.missDip = 1; st.red = Math.max(st.red, 0.35);
         break;
       }
       case 'fatal':
         stage.dial.ringFlash(PALETTE.red, 1);
         if (d.text) floatText(d.text, d.angle || 0, 1.38, '#ff5a46', true);
-        st.shake = 0.85; st.glitch = 0.8; st.red = Math.max(st.red, 0.45);
+        st.shake = 0.85; st.red = Math.max(st.red, 0.45);
         break;
       case 'levelup':
-        floatText(`LEVEL ${d.level} +2s`, 0, 1.55, '#ffb347', true);
+        floatText(`Level ${d.level} +2s`, 0, 1.55, '#ffb347', true);
         st.signFlare = 1; st.swell = 1; st.pump = 1; st.punch = Math.max(st.punch, 0.65);
         break;
       case 'start':
@@ -287,7 +287,6 @@ export function createFx(stage, dom) {
   // ---------- per-frame
   const red = new THREE.Color(PALETTE.red);
   const white = new THREE.Color(0xffffff);
-  const boostCol = new THREE.Color(PALETTE.blue);
   let clock = 0;
   const decay = (v, dt, dur) => Math.max(0, v - dt / dur);
 
@@ -328,24 +327,8 @@ export function createFx(stage, dom) {
     key.color.copy(key.userData.base.color).lerp(white, st.white * 0.55).lerp(red, st.dim * 0.55);
     lights.rim.intensity = lights.rim.userData.base.intensity * bMult * (1 + 0.25 * st.swell) * (1 - 0.5 * st.dim);
     lights.rim.color.copy(lights.rim.userData.base.color).lerp(red, st.dim * 0.7);
-    if (lights.kicker) {
-      lights.kicker.intensity = lights.kicker.userData.base.intensity * bMult * (1 + 0.25 * st.swell) * (1 - 0.5 * st.dim);
-      lights.kicker.color.copy(lights.kicker.userData.base.color).lerp(red, st.dim * 0.7);
-    }
-    if (lights.dial) {
-      dialPoint(s.needleAngle, 0.76, 0.28, lights.dial.position);
-      lights.dial.intensity = lights.dial.userData.base.intensity * vis.glow * (1 + 0.5 * st.swell + 0.35 * st.white) * (s.boost && s.mode === 'play' ? 1.2 : 1) * (1 - 0.6 * st.dim);
-      lights.dial.color.copy(lights.dial.userData.base.color)
-        .lerp(boostCol, s.boost && s.mode === 'play' ? 0.85 : 0)
-        .lerp(st.softColor, st.softHit * 0.5)
-        .lerp(red, Math.max(st.missDip * 0.8, st.dim * 0.8));
-    }
     lights.hemi.intensity = lights.hemi.userData.base.intensity * bMult * (1 - 0.5 * st.dim);
 
-    // controlled selective bloom pulse on hits and perfects
-    if (stage.bloom) {
-      stage.bloom.strength = (0.48 + 0.14 * st.swell + 0.12 * st.white) * vis.glow;
-    }
     coneMat.uniforms.uOpacity.value = (0.065 + 0.025 * st.swell + 0.02 * st.white) * vis.glow * (1 - 0.55 * st.dim);
     coneMat.uniforms.uColor.value.copy(key.color);
 
@@ -384,14 +367,10 @@ export function createFx(stage, dom) {
     const blinkOn = s.mode !== 'play' || Math.floor(clock * 1.6) % 2 === 0;
     rec.material.emissiveIntensity = Math.max(st.recMiss > 0 ? 10 : blinkOn ? 4 : 0.3, 12 * st.camFlash);
 
-    // shake + RGB glitch (miss)
+    // shake
     st.shake = decay(st.shake, dt, 0.25);
     const a = 0.09 * st.shake * st.shake;
     rig.shake.set((Math.random() - 0.5) * a, (Math.random() - 0.5) * a, 0);
-    st.glitch = decay(st.glitch, dt, 0.25);
-    glitch.enabled = st.glitch > 0;
-    glitch.uniforms.amount.value = 0.012 * st.glitch;
-    glitch.uniforms.angle.value = Math.random() * Math.PI * 2;
 
     // shackle: open while playing, snaps shut (with a small bounce) on game over
     if (st.shackleT < 1) {

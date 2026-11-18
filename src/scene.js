@@ -54,6 +54,49 @@ function makeMicroNormal(size = 128) {
   return tex;
 }
 
+// Contrast + saturation grade, done inside every shader's tone-mapping step instead of a CSS filter on the canvas
+// (a CSS filter costs the compositor an extra full-screen pass every frame). three.js leaves CustomToneMapping as
+// an empty slot: it becomes ACES (unchanged) followed by the grade, applied in sRGB space like the CSS filter was.
+// One shared uniform feeds every material, so the settings sliders update live without recompiling anything.
+// It stores (contrast - 1, saturation - 1), so a material that somehow missed the hook renders plain ACES.
+const GRADE = { value: new THREE.Vector2(0.05, 0.05) };
+THREE.ShaderChunk.tonemapping_pars_fragment = THREE.ShaderChunk.tonemapping_pars_fragment.replace(
+  'vec3 CustomToneMapping( vec3 color ) { return color; }',
+  /* glsl */`uniform vec2 uGrade;
+vec3 CustomToneMapping( vec3 color ) {
+  color = ACESFilmicToneMapping( color );
+  vec3 c = pow( color, vec3( 1.0 / 2.2 ) );
+  float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
+  c = mix( vec3( l ), c, 1.0 + uGrade.y );
+  c = ( c - 0.5 ) * ( 1.0 + uGrade.x ) + 0.5;
+  return pow( clamp( c, 0.0, 1.0 ), vec3( 2.2 ) );
+}`,
+);
+// Every material (built-in or ShaderMaterial, made now or later) gets the shared uniform at compile time.
+THREE.Material.prototype.onBeforeCompile = function (shader) { shader.uniforms.uGrade = GRADE; };
+
+// PBR -> fixed-function look-alike. Without an environment map a MeshStandardMaterial only ever shows
+// diffuse * (1 - metalness) plus a light-coloured highlight, which Lambert / Phong reproduce for a fraction of
+// the per-pixel cost on integrated GPUs. Metals keep a highlight (Phong); everything else is Lambert.
+const DIELECTRIC_F0 = new THREE.Color(0.04, 0.04, 0.04), METAL_SPEC = 0.2;
+function cheapMaterial(m) {
+  const metal = m.metalness || 0;
+  const common = {
+    name: m.name, map: m.map || null,
+    emissive: m.emissive, emissiveIntensity: m.emissiveIntensity, emissiveMap: m.emissiveMap || null,
+    transparent: m.transparent, opacity: m.opacity, side: m.side, vertexColors: m.vertexColors,
+  };
+  if (metal < 0.5) return new THREE.MeshLambertMaterial({ color: m.color, ...common });
+  const rough = THREE.MathUtils.clamp(m.roughness, 0.25, 1);
+  return new THREE.MeshPhongMaterial({
+    ...common,
+    color: m.color.clone().multiplyScalar(1 - metal),
+    // Phong highlights aren't energy-normalised, so a raw F0 reads as polished chrome; 0.2 matches the PBR look
+    specular: DIELECTRIC_F0.clone().lerp(m.color, metal).multiplyScalar(METAL_SPEC),
+    shininess: Math.round(THREE.MathUtils.clamp(2 / rough ** 4 - 2, 8, 80)),
+  });
+}
+
 // Soft radial glow texture for practical light halos (replaces 12-pass full-screen UnrealBloomPass).
 function makeGlowTexture(size = 64) {
   const c = document.createElement('canvas'); c.width = c.height = size;
@@ -81,7 +124,7 @@ export async function createStage(container, onProgress = () => {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
   const MAX_PIXEL_RATIO = Math.min(Math.max(window.devicePixelRatio, 1), 1.15) * RENDER_SCALE;
   renderer.setPixelRatio(MAX_PIXEL_RATIO);
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMapping = THREE.CustomToneMapping;    // = ACES + the contrast/saturation grade above
   renderer.toneMappingExposure = 1.16;
   container.appendChild(renderer.domElement);
 
@@ -134,7 +177,7 @@ export async function createStage(container, onProgress = () => {}) {
   // and peripheral studio props to MeshLambertMaterial so Intel UHD hits 120+ fps (< 6 ms/frame).
   const microNormal = makeMicroNormal(128);
   const HERO_LOCK = /^(Lock_Body|Lock_Shackle|Lock_Badge|Dial_Bezel|Dial_Vinyl)$/;
-  const KEEP_MAT = /^(Dial_Label|Monitor_Screen|Camera_REC|Lamp_Bulb|Sign_OnAir_Glow|Softbox_._Panel)$/;
+  const SCREEN_MAT = /^(Dial_Label|Monitor_Screen)$/;   // hud.js gives these their own unlit canvas material
   gltf.scene.traverse((o) => {
     const m = o.material;
     if (!m || !o.isMesh) return;
@@ -154,8 +197,10 @@ export async function createStage(container, onProgress = () => {}) {
         name: m.name,
       });
       m.dispose();
-    } else if (!KEEP_MAT.test(o.name) && !m.emissiveIntensity) {
-      o.material = new THREE.MeshLambertMaterial({ color: m.color, map: m.map || null, name: m.name });
+    } else if (!SCREEN_MAT.test(o.name) && m.isMeshStandardMaterial) {
+      // Every glTF material arrives as PBR; emissiveIntensity defaults to 1, so the old "!emissiveIntensity"
+      // test never fired and the whole room was shaded with MeshStandardMaterial. Swap to the cheap look-alike.
+      o.material = cheapMaterial(m);
       m.dispose();
     }
   });
@@ -201,11 +246,8 @@ export async function createStage(container, onProgress = () => {}) {
     particles: true,
   };
 
-  // Lightweight shims so fx.js & main.js work seamlessly without the 13-pass EffectComposer.
-  const bloom = { enabled: true, strength: 0.48 };
-  const glitch = { enabled: false, uniforms: { amount: { value: 0 }, angle: { value: 0 } } };
-  const grade = { uniforms: { uRed: { value: 0 }, uVignette: { value: 0.45 }, uTime: { value: 0 } } };
-  const composer = null;
+  // Screen vignette and miss-red tint values updated per frame for CSS opacity layers.
+  const grade = { uniforms: { uRed: { value: 0 }, uVignette: { value: 0.45 } } };
 
   const rig = { offset: new THREE.Vector3(), shake: new THREE.Vector3(), targetOffset: new THREE.Vector3() };
   let basePr = MAX_PIXEL_RATIO;
@@ -233,8 +275,7 @@ export async function createStage(container, onProgress = () => {}) {
     const prevPreset = visuals.preset;
     Object.assign(visuals, next);
     renderer.toneMappingExposure = 0.96 * visuals.brightness;
-    container.style.setProperty('--canvas-contrast', visuals.contrast.toFixed(2));
-    container.style.setProperty('--canvas-sat', visuals.saturation.toFixed(2));
+    GRADE.value.set(visuals.contrast - 1, visuals.saturation - 1);
     lampHalo.material.opacity = 0.42 * visuals.glow;
     signHalo.material.opacity = 0.32 * visuals.glow;
     maxBufW = visuals.preset === 'perf' ? 1152 : visuals.preset === 'ultra' ? 2048 : 1536;
@@ -268,7 +309,7 @@ export async function createStage(container, onProgress = () => {}) {
   }
 
   return {
-    renderer, scene, camera, composer, bloom, glitch, grade, lights, parts, rig,
+    renderer, scene, camera, grade, lights, parts, rig,
     halos: { lamp: lampHalo, sign: signHalo },
     visuals, applyVisuals, render, resize, setPixelRatio,
     maxPixelRatio: MAX_PIXEL_RATIO,

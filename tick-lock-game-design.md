@@ -40,8 +40,9 @@ The direction reversal is the heart of the game. The player can't settle into a 
 
 | Action | Keyboard | Mouse / Touch | Gamepad |
 |---|---|---|---|
-| **Pick** | Space or Enter | Click or tap the dial, or the PICK button | A |
-| **Boost (hold)** | Shift | Hold the BOOST button | RB or RT |
+| **Pick** | Space or Enter | Click or tap the dial, or the Pick button | A |
+| **Boost (hold)** | Shift | Hold the Boost button | RB or RT |
+| **Pause** | P or Esc | Pause button | — |
 | **Start / Retry** | Same as Pick | Same as Pick | A |
 
 A browser only detects a gamepad after one of its buttons has been pressed.
@@ -51,40 +52,43 @@ A browser only detects a gamepad after one of its buttons has been pressed.
 ## 4. Game Elements
 
 ### 4.1 Needle
-- A tapered magenta stylus arm that pivots from the edge of the center hub, with a sharp tip just past the ring. In 3D, the dial is a vinyl record set into the face of a padlock.
-- It has a glow and a sweep trail along the groove band, and it turns cyan while Boost is held (with a longer trail).
+- A razor-slim violet stylus light beam (`0x7b8cff`) that pivots from the edge of the center hub (`HUB_R = 0.455`), with a sharp tip just past the vinyl groove ring (`TIP_R = 1.0`).
+- It leaves a subtle sweep trail and sparkles along the groove band, and turns cyan (`0x39d5ff`) while Boost is held (with a longer trail).
 - Hit detection uses the needle's angle where it crosses the ring.
 
 ### 4.2 Zones
 
 | Zone | Color | Reward |
 |---|---|---|
-| **Gold** | Gold | Score |
-| **Blue (time)** | Blue, labeled "+2s" | Score + 2 s time. At most one on the ring at a time. Lives 30% shorter than gold |
-| **Perfect core** | White center strip, the middle 30% of any zone | Score ×2, "PERFECT" text, bigger burst |
+| **Gold** | Amber gold | Score |
+| **Blue (time)** | Cyan blue | Score + 2 s time. At most one on the ring at a time. Lives 30% shorter than gold |
+| **Recovery (unjam)** | Mint emerald | Restores half of the combo lost on the preceding miss + refunds 1.2 s (`HIT_TIME + MISS_TIME`). Appears ahead of the needle for 2.8 s after a full miss (`1.15×` width) |
+| **Perfect core** | Warm white center strip, the middle 30% of any zone | Score ×2, "PERFECT" text, white burst & camera punch |
 
 **Zone behavior**
 - **Pop-in:** a zone grows in over 0.15 s when it appears.
 - **Shrinking (from level 4):**
-  - A zone shrinks steadily over its lifetime, then disappears.
-  - A faint outline shows its original size, so the shrinking is easy to read.
-  - The zone blinks in its last 0.8 s.
-  - A zone that expires costs nothing and is replaced right away.
-- **Placement:** new zones never appear within 0.7 rad (about 40°) of the needle, and never overlap other zones.
-- **Count:** the number of zones on the ring is set by the level (1 → 5).
+  - Gold and blue zones shrink steadily down to **45%** of their original width (`1 − k × 0.55`) over their lifetime (recovery zones shrink to 60%).
+  - A faint outline shows the original size once shrinking begins, so the remaining tolerance stays readable.
+  - Zones blink in their last 0.8 s (recovery zones pulse rapidly).
+  - A zone that expires costs nothing and is replaced right away (recovery zones simply clear if missed).
+- **Placement & motion:** new zones never appear within 0.7 rad (about 40°) of the needle, and never overlap other zones. From **level 6**, newly spawned regular zones have a chance (`35%` at L6–7, `50%` at L8+) to **drift smoothly** along the groove band (`0.26–0.48 rad/s`), bouncing off neighboring zones so they never collide.
+- **Count:** the number of active regular zones on the ring is set by the level (1 → 5).
 
 ### 4.3 Clock (time as health)
-The clock is the player's health bar. It drains at 1 second per second, and these change it:
+The clock waits for the player's **first hit** before counting down (**First-Hit Clock Freeze**; misses before Hit #1 give a small 0.08 s needle recoil without draining time). Once running, it drains at 1 second per second, and these change it:
 
 | Event | Time |
 |---|---|
-| Start | 12 s |
-| Any hit | +0.3 s |
+| Start | 30 s |
+| Any hit (after Hit #1) | +0.45 s |
 | Blue zone hit | +2 s (on top of the hit bonus) |
+| Recovery zone hit | +1.2 s refund (on top of the hit bonus) |
 | Level up | +2 s |
-| Miss | −1.5 s |
+| Near-miss graze (within 6.0° of zone edge) | −0.4 s (combo halved) |
+| Full miss | −1.2 s (0.10 s jam recoil, 0.45 s breather at `0.62×` speed, 0.22 s input lock) |
 
-**Design intent:** a player who rarely misses can roughly hold the clock steady. Runs end because mistakes pile up at higher levels, not because the clock drains on its own. That makes losing feel fair: "I missed", not "the timer was too short".
+**Design intent:** a player who hits consistently can hold the clock steady well past 30 s. Runs end because misses compound at higher levels, while near-miss grazes and post-miss recovery zones make mistakes dramatic and salvageable rather than abrupt.
 
 ### 4.4 Boost (risk and reward)
 - **While held:** the needle moves ×1.8 faster and every hit scores ×2.
@@ -96,13 +100,14 @@ The clock is the player's health bar. It drains at 1 second per second, and thes
 ## 5. Scoring
 
 ```
-points = 100 × (1 + 0.1 × combo) × (Perfect ? 2 : 1) × (Boost ? 2 : 1)
+points = 100 × (1 + 0.1 × combo) × (Perfect ? 2 : 1) × (Boost ? 2 : 1) × (Flow ? 1.25 : 1)
 ```
 
-- **Combo:** goes up by 1 on every hit and resets to 0 on a miss.
-- **Display:** score, combo and level are shown in the hub. A floating text shows each hit's points.
-- **Best score:** saved in that browser (localStorage) and shown on the title and end screens.
-- **End screen:** final score, level reached, total hits, Perfect count and best score.
+- **Combo:** goes up by 1 on every hit, is halved on a near-miss graze, and resets to 0 on a full miss (with half of combos `>= 2` restorable via the clutch Recovery zone).
+- **Flow State:** begins at `10×` combo, adding a gold inner-rim aura and a `×1.25` score multiplier.
+- **Display:** score, combo, level and lock-pin progress dots are shown in the hub. Floating text shows each hit's points.
+- **Leaderboard & run log:** Top 10 daily scores (with callsign, studio avatar, level, and survival time) are saved in `localStorage` (`ticklock_leaderboard`, plus full CSV-exportable run history in `ticklock_history`), and the top five appear on the 3D studio monitor on the menu.
+- **End screen:** final score, level reached, best combo, hits, Perfect count, callsign/avatar entry, and Leaderboard / Play again / Main menu actions.
 
 ---
 
@@ -130,19 +135,19 @@ Each level adds **one** new idea, so players learn one thing at a time.
 
 | Level | New idea | Hits | Starts at hit # | Speed (rad/s) | Zone width | Window | Zones | Zone lifetime | Blue chance |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Basics: one zone, needle reverses | 4 | 0 | 2.0 | 30° | 262 ms | 1 | No shrink | 0% |
-| 2 | Second zone: pick a target | 4 | 4 | 2.2 | 28° | 222 ms | 2 | No shrink | 0% |
-| 3 | Blue time zones appear | 5 | 8 | 2.4 | 26° | 189 ms | 2 | No shrink | 15% |
-| 4 | Zones start shrinking | 5 | 13 | 2.6 | 25° | 168 ms | 3 | 5.0 s | 15% |
-| 5 | Faster and narrower | 6 | 18 | 2.9 | 24° | 144 ms | 3 | 4.2 s | 18% |
-| 6 | Four zones on the ring | 6 | 24 | 3.2 | 23° | 125 ms | 4 | 3.6 s | 20% |
-| 7 | Zones live shorter | 8 | 30 | 3.5 | 22° | 110 ms | 4 | 3.2 s | 20% |
-| 8 | Five zones, then endless | 8 | 38 | 3.8 | 22° | 101 ms | 5 | 2.8 s | 22% |
+| 1 | Basics: one zone, needle reverses | 4 | 0 | 2.00 | 34° | 297 ms | 1 | No shrink | 0% |
+| 2 | Second zone: pick a target | 4 | 4 | 2.15 | 32° | 260 ms | 2 | No shrink | 0% |
+| 3 | Blue time zones appear | 5 | 8 | 2.35 | 30° | 223 ms | 2 | No shrink | 18% |
+| 4 | Zones start shrinking (45% floor) | 5 | 13 | 2.50 | 29° | 202 ms | 3 | 6.5 s | 18% |
+| 5 | Faster and slightly narrower | 6 | 18 | 2.70 | 28° | 181 ms | 3 | 5.8 s | 20% |
+| 6 | Four zones on the ring; drifting zones begin | 6 | 24 | 2.95 | 27° | 160 ms | 4 | 5.2 s | 22% |
+| 7 | Faster sweep | 8 | 30 | 3.20 | 25° | 136 ms | 4 | 4.6 s | 22% |
+| 8 | Five zones, frequent drift, then endless | 8 | 38 | 3.45 | 24° | 121 ms | 5 | 4.2 s | 24% |
 
 ### 6.3 Endless mode (after level 8)
-- **What repeats:** level 8's settings, with zones that are 8 hits long.
+- **What repeats:** level 8's settings, 8 hits per level.
 - **Speed:** goes up by 0.1 rad/s every level.
-- **Window floor:** zone width grows if needed so the window never drops below **90 ms**. The game keeps getting harder without becoming impossible.
+- **Window floor:** zone width grows if needed so the reaction window never drops below **100 ms**. The game keeps getting harder without becoming impossible.
 
 ### 6.4 Level up
 - **Reward:** +2 s and a floating "LEVEL n +2s" with a chime.
@@ -170,20 +175,25 @@ An average player reaches level 8 around 30 s and runs out of time shortly after
 
 ## 7. Balance Constants
 
-All values sit in one block at the top of the game script (`LEVELS` and the constants after it), and they match the **Tick Lock Balance Sheet**.
+All values sit in one block at the top of `src/game.js` (`LEVELS` and the constants after it).
 
 | Constant | Value | Effect |
 |---|---|---|
-| `START_TIME` | 12 s | Clock at start |
-| `HIT_TIME` | 0.3 s | Time added on every hit |
+| `START_TIME` | 30 s | Clock at start (paused until Hit #1) |
+| `HIT_TIME` | 0.45 s | Time added on every hit (after Hit #1) |
 | `BLUE_TIME` | 2 s | Extra time from a blue zone |
 | `LEVEL_TIME` | 2 s | Time added on level up |
-| `MISS_TIME` | 1.5 s | Time lost on a miss |
+| `MISS_TIME` | 1.2 s | Time lost on a full miss (refunded by recovery hit) |
+| `GRAZE_RAD` / `GRAZE_TIME` | 6.0° / 0.4 s | Near-miss window and reduced penalty (combo halved) |
+| `RECOVERY_LIFE` | 2.8 s | Lifetime of green recovery zone spawned after a full miss |
+| `FLOW_COMBO` / `FLOW_BONUS` | 10 / ×1.25 | Combo threshold and score multiplier for Flow State |
+| `FREEZE_DUR` | 0.45 s | Fatal freeze-frame hold before Game Over |
 | `ENDLESS_SPEED` | 0.1 rad/s | Speed added per level after L8 |
-| `MIN_WINDOW` | 0.09 s | Reaction window floor |
+| `MIN_WINDOW` | 0.10 s | Reaction window floor (100 ms) |
 | Boost | ×1.8 speed, ×2 score | Risk and reward |
 | Perfect core | 30% of zone | ×2 score |
 | Spawn gap | 0.7 rad | Minimum distance from the needle for a new zone |
+| Zone shrink floor | 45% of original (60% recovery) | Minimum width a shrinking zone reaches before expiring |
 | Zone fade blink | last 0.8 s | Warning before a zone expires |
 | Blue lifetime | ×0.7 of gold | Blue zones expire faster |
 
@@ -212,34 +222,37 @@ All values sit in one block at the top of the game script (`LEVELS` and the cons
 
 | Moment | Visual | Audio |
 |---|---|---|
-| Hit | Burst of particles at the needle tip, ring flash in the zone color, floating points | Short square-wave blip (660 Hz) |
-| Perfect | Bigger white burst, "PERFECT" text | Higher blip (880 Hz) |
-| Blue zone | Blue flash, "+2s" text | Triangle chime (990 Hz) |
-| Miss | Screen shake, red ring flash, "−1.5s" | Low sawtooth buzz (140 Hz) |
-| Level up | "LEVEL n +2s" floating text | Bright chime (1320 Hz) |
-| Low time | Timer turns red under 5 s | — |
-| Game over | "LOCKED OUT" screen | Low falling buzz |
+| Active clock (beat) | Speaker cone & waveform pulse with hits/boost | Clockwork eighth-note tick + sub-bass pulse scaling with level & Boost, plus harmonic shimmer in Flow State |
+| Hit | Burst of particles at the needle tip, ring flash in the zone color, floating points | Tactile lock click + rising square-wave blip (660 Hz+) |
+| Perfect | Bigger white burst, "Perfect" text | Higher blip (880 Hz+) + crystal harmonic |
+| Blue zone | Blue flash, "+2s" text | Two-note triangle/sine chime (990 → 1480 Hz) |
+| Near-miss graze | Orange spark burst, ghost tick, "So close!" | Metallic friction spark zip |
+| Miss | Screen shake, red ring flash, "−1.2s", recovery zone spawns | Pin jam clank + low sawtooth buzz (140 Hz) |
+| Level up | "Level n +2s" floating text | Bright chime (990 → 1320 Hz) |
+| Low time | Timer turns red and pulses under 5 s | — |
+| Game over | "Locked out" screen, shackle slams shut | Heavy slam + low falling buzz |
 
 Sound starts only after the first input, as browsers require.
 
-In 3D, the studio around the lock also reacts to these moments. Softboxes flash, the speaker cone pumps, the monitor waveform spikes, the REC LED blinks, and a miss adds an RGB glitch. The full table is in the [3D visual spec §4](docs/superpowers/specs/2026-11-17-tick-lock-3d-visual-design.md).
+In 3D, the studio around the lock also reacts to these moments. Softboxes flash, the speaker cone pumps, the monitor waveform spikes and glitches on miss, and the REC LED blinks. The full table is in the [3D visual spec §4](docs/superpowers/specs/2026-11-17-tick-lock-3d-visual-design.md).
 
 ---
 
 ## 10. Screens
 
-1. **Title:** "TICK LOCK", one-line instruction, blinking "PRESS SPACE / TAP", best score. The needle idles around the dial. In 3D, the hub label shows the title and best score, the studio monitor shows the title card, and the camera slowly dollies with mouse parallax.
-2. **Play:** dial and needle, with the hub showing time remaining, score, combo and level. In 3D, the monitor shows a REC timecode, a live waveform, the combo and the level.
-3. **Game over:** "LOCKED OUT", final score, level, hits, Perfects, best score, blinking "PRESS TO RETRY". Input is ignored for 0.6 s so a panicked press doesn't skip the screen. In 3D, the shackle snaps shut, the studio dims to red, and the results card appears on the monitor.
+1. **Title:** "Muasoom Studio / TICK LOCK" left-aligned typographic menu (`Play`, `Leaderboard`, `Settings`), bottom corner hints and credit, slow camera dolly with mouse parallax. The record hub displays `Best score` and the 3D studio monitor displays today's top five.
+2. **Briefing & Start Cue:** choosing **Play** opens the **How to play** modal; closing it leads to `"Press Space to start"`, which the violet needle wipes away as the run starts and the ON AIR sign flickers lit.
+3. **Play:** dial and needle, hub showing time remaining, score, combo, level and lock-pin progress dots; monitor showing REC timecode, waveform, event cards and miss glitch. Pressing **P** or **Esc** pans the camera right to the 3D world-space Pause Menu (`src/pause3d.js`).
+4. **Game over:** "LOCKED OUT", 0.45 s fatal freeze-frame, shackle snaps shut, studio dims to red, monitor shows results, and `#gameover-panel` shows breakdown, avatar/name entry for today's leaderboard, and Play again / Leaderboard / Main menu. Input is ignored for 0.6 s so a panicked press doesn't skip the screen.
 
 ---
 
 ## 11. Booth Notes
 
-- **Easy to learn:** one button is understandable in seconds, and the queue moves fast at about 30 s per run.
-- **Setup:** put the game on a screen visitors can see from the queue. The needle and flashes read well from a distance.
-- **Input:** a gamepad or a big arcade button is more fun than a keyboard. Map it to A.
-- **Best score:** it is saved per browser. Clear localStorage at the start of each day for a fresh "high score of the day".
+- **Easy to learn:** one button is understandable in seconds, and the queue moves fast at about 30–60 s per run.
+- **Setup:** put the game on a screen visitors can see from the queue. The needle, 3D monitor top-5, and flashes read well from a distance.
+- **Input:** keyboard, gamepad (A / RB / RT), mouse, or touch. Press **F** to toggle the performance overlay (`fps · ms · px`).
+- **Best score & Daily Board:** Top 10 and full run history live in localStorage (`ticklock_lb_date` automatically resets the daily board at midnight while preserving multi-day history in `ticklock_history` for CSV export; `Clear today's scores` resets manually after a second confirmation press). Clear sample scores (`SEED_BOARD`) before the booth opens.
 - **Playtesting:** watch players instead of asking them. Note where they die and whether they smile at level-ups.
 
 ---
@@ -247,23 +260,15 @@ In 3D, the studio around the lock also reacts to these moments. Softboxes flash,
 ## 12. Status and Next Steps
 
 **Done**
-- Needle, zones, reversal, Perfect core, Boost
-- Multiple shrinking zones, blue time zones
-- 8-level progression + endless, time economy as health
-- Sound, particles and screen feedback
-- Keyboard, mouse, touch and gamepad input; local best score
-
-**3D version (2026-11-17)**
-- Done: visual direction ("Studio Lock"), Blender studio model (`art/tick-lock-studio.blend` → `assets/studio.glb`, about 37k triangles after the detail pass), and a Three.js visual prototype covering zones, needle, HUD, studio reactions and screens. The prototype runs on a temporary demo driver (`src/demo.js`).
-- Next: port the real rules from sections 2–7 (the `LEVELS` table, time economy, scoring) and the sounds from section 9 into the 3D build, replacing the demo driver.
+- Gameplay engine (`src/game.js`): 8-level progression + endless mode, reversal, Perfect core, Boost, Flow State (`10×+`), First-Hit Clock Freeze, Near-Miss Graze, Clutch Recovery zones, Level 6+ Drifting zones, and Fatal Freeze-Frame.
+- 3D Studio Lock scene (`src/scene.js`, `src/dial.js`, `src/hud.js`, `src/fx.js`, `assets/studio.glb`): vinyl dial shader, razor-slim violet needle, single-pass hardware optimization (~83–164 fps), diegetic monitor leaderboard, unified sentence-case 3D HUD & floating callouts, ON AIR ignition flicker.
+- UI & 3D Pause (`index.html`, `src/style.css`, `src/pause3d.js`, `src/avatars.js`): Boot shader pre-compile screen, Hallmark-styled menu and panels/modals, How to play briefing, Start cue needle wipe, Open House Top-10 daily-rollover leaderboard + CSV export, and 3D world-space pause menu.
+- Audio (`src/audio.js`): WebAudio synthesized feedback for all gameplay events plus procedural late-night studio pulse that scales with level, Boost, and Flow State.
 
 **Next**
-- Booth playtest: record run length and level reached, then fill in real miss rates in the balance sheet
-- Online leaderboard with player names (Supabase or Firebase)
-- Visual theme pass: dial art, background, needle style
-- Music track that speeds up with level
+- Booth playtest: record live run lengths and levels reached in `ticklock_history` CSV, clear sample `SEED_BOARD` entries before booth opening, and fine-tune `LEVELS` if needed.
+- Optional online backend sync if Wi-Fi is available.
 
 **Ideas if time allows**
-- **Special zones:** red "trap" zones that cost time if hit, and moving zones that slide along the ring
-- **Double-tap zones:** zones that need two hits
+- **Special zones:** red "trap" zones that cost time if hit, and double-tap zones
 - **Daily seed:** everyone gets the same zone layout, for a fair leaderboard

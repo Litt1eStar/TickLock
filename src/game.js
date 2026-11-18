@@ -2,14 +2,14 @@
 // Near-Miss Graze, Ghost Tick Mark, Recovery/Unjam Zone, Fatal Freeze-Frame, and Flow State.
 
 const LEVELS = [ // [hits in level, speed rad/s, width degrees, zones, lifetime s (0 = no shrink), blue chance]
-  [4, 2.0, 34, 1, 0,   0.00],
-  [4, 2.2, 32, 2, 0,   0.00],
-  [5, 2.4, 30, 2, 0,   0.18],
-  [5, 2.6, 28, 3, 5.2, 0.18],
-  [6, 2.9, 27, 3, 4.5, 0.20],
-  [6, 3.2, 26, 4, 3.9, 0.22],
-  [8, 3.5, 24, 4, 3.4, 0.22],
-  [8, 3.8, 23, 5, 3.0, 0.24],
+  [4, 2.00, 34, 1, 0,   0.00],
+  [4, 2.15, 32, 2, 0,   0.00],
+  [5, 2.35, 30, 2, 0,   0.18],
+  [5, 2.50, 29, 3, 6.5, 0.18],
+  [6, 2.70, 28, 3, 5.8, 0.20],
+  [6, 2.95, 27, 4, 5.2, 0.22],
+  [8, 3.20, 25, 4, 4.6, 0.22],
+  [8, 3.45, 24, 5, 4.2, 0.24],
 ];
 const START_TIME = 30, HIT_TIME = 0.45, BLUE_TIME = 2, LEVEL_TIME = 2, MISS_TIME = 1.2;
 const ENDLESS_SPEED = 0.1, MIN_WINDOW = 0.10;          // endless: +0.1 rad/s per level; widen zones so window >= 100 ms
@@ -67,7 +67,10 @@ export function createGame(emit) {
       const zl = kind === 'recovery'
         ? RECOVERY_LIFE
         : life ? (kind === 'blue' ? life * BLUE_LIFE : life) : 0;
-      s.zones.push({ angle, half, baseHalf: half, kind, age: 0, life: zl, pop: 0, alpha: 1 });
+      const driftChance = s.level >= 8 ? 0.50 : s.level >= 6 ? 0.35 : 0;
+      const driftSpeed = (0.26 + Math.min(0.22, (s.level - 6) * 0.04)) * (Math.random() < 0.5 ? 1 : -1);
+      const drift = kind !== 'recovery' && Math.random() < driftChance ? driftSpeed : 0;
+      s.zones.push({ angle, half, baseHalf: half, kind, age: 0, life: zl, pop: 0, alpha: 1, drift });
       return;
     }
   }
@@ -176,7 +179,7 @@ export function createGame(emit) {
       }
     }
     const deg = Math.max(1, Math.round((bestGap * 180) / Math.PI));
-    const timing = bestSigned >= 0 ? 'EARLY' : 'LATE';
+    const timing = bestSigned >= 0 ? 'early' : 'late';
     return { zone: best, gapRad: bestGap, deg, timing };
   }
 
@@ -187,7 +190,7 @@ export function createGame(emit) {
     s.flow = s.combo >= FLOW_COMBO;
     s.time -= GRAZE_TIME;
     emit('graze', { angle: s.needleAngle, deg: info.deg, timing: info.timing });
-    if (s.time <= 0) triggerFatal(`MISSED BY ${info.deg}° (${info.timing})`);
+    if (s.time <= 0) triggerFatal(`Missed by ${info.deg}° (${info.timing})`);
   }
 
   function registerMiss(info = findNearestMiss()) {
@@ -207,7 +210,7 @@ export function createGame(emit) {
     emit('miss', { angle: s.needleAngle, deg: info.deg, timing: info.timing });
 
     if (s.time <= 0) {
-      triggerFatal(`MISSED BY ${info.deg}° (${info.timing})`);
+      triggerFatal(`Missed by ${info.deg}° (${info.timing})`);
       return;
     }
 
@@ -295,7 +298,7 @@ export function createGame(emit) {
       s.time -= dt;
       if (s.time <= 0) {
         const info = findNearestMiss();
-        return triggerFatal(`TIME UP, ${info.deg}° AWAY`);
+        return triggerFatal(`Time up · ${info.deg}° away`);
       }
     }
 
@@ -303,9 +306,16 @@ export function createGame(emit) {
       z.age += dt;
       z.pop = Math.min(1, z.age / 0.15);
       z.pop = 1 - Math.pow(1 - z.pop, 3);
+      if (z.drift) {
+        const nextAngle = wrap(z.angle + z.drift * dt);
+        const blocked = s.zones.some((o) => o !== z && Math.abs(wrap(nextAngle - o.angle)) < z.baseHalf + o.baseHalf + 0.08);
+        if (blocked) z.drift *= -1;
+        else z.angle = nextAngle;
+      }
       if (z.life) {
         const k = Math.min(1, z.age / z.life);
-        z.half = z.baseHalf * (1 - k * (z.kind === 'recovery' ? 0.55 : 0.85));
+        // Cap shrink at 45% of original size (was 15%) so mid-game zones stay humanly hittable
+        z.half = z.baseHalf * (1 - k * (z.kind === 'recovery' ? 0.40 : 0.55));
         const left = z.life - z.age;
         if (z.kind === 'recovery') {
           // Fast urgent pulse on the Recovery zone

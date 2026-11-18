@@ -3,6 +3,7 @@
 
 export function createAudio() {
   let ctx = null;
+  let beatAcc = 0, stepIdx = 0;
 
   function ensure() {
     if (!ctx) {
@@ -34,7 +35,11 @@ export function createAudio() {
   function react(evt, d = {}) {
     switch (evt) {
       case 'start':
+        beatAcc = 0; stepIdx = 0;
         tone(440, 'triangle', 0.09, 0.12, 660, 0);
+        break;
+      case 'title':
+        beatAcc = 0; stepIdx = 0;
         break;
       case 'hit': {
         // Pitch climbs with combo for an addictive rising tension
@@ -80,6 +85,7 @@ export function createAudio() {
         tone(220, 'sawtooth', 0.28, 0.16, 85, 0);
         break;
       case 'gameover':
+        beatAcc = 0; stepIdx = 0;
         // Heavy shackle slam + low falling buzz
         tone(120, 'square', 0.08, 0.20, 38, 0);
         tone(150, 'sawtooth', 0.42, 0.16, 52, 0.04);
@@ -87,5 +93,33 @@ export function createAudio() {
     }
   }
 
-  return { react, unlock: ensure };
+  // Subtle procedural late-night studio pulse + clockwork tick while the timer is active.
+  function update(dt, s) {
+    if (!ctx || ctx.state !== 'running' || s.mode !== 'play' || s.paused || !s.clockStarted || s.freezeT > 0 || dt <= 0) {
+      return;
+    }
+    const bpm = Math.min(152, 100 + (s.level - 1) * 6) * (s.boost ? 1.22 : 1);
+    const stepDur = 30 / bpm;
+    beatAcc += dt;
+    if (beatAcc < stepDur) return;
+    beatAcc %= stepDur;
+
+    const beat = stepIdx & 7;
+    stepIdx += 1;
+
+    if (beat % 2 === 0) {
+      tone(beat === 0 ? 1350 : 980, 'triangle', 0.016, 0.022, 320, 0);
+    }
+    if (beat === 0 || beat === 4) {
+      const root = s.flow ? 65.41 : 55.0;
+      tone(root, 'triangle', 0.13, 0.045, root * 0.92, 0);
+    }
+    if (s.flow && beat % 2 === 1) {
+      const notes = [220, 261.63, 329.63, 392.0];
+      const f = notes[(beat >> 1) & 3];
+      tone(f, 'sine', 0.09, 0.024, f, 0);
+    }
+  }
+
+  return { react, update, unlock: ensure };
 }

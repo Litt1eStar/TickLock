@@ -1,437 +1,350 @@
-# Tick Lock 3D — Project Handoff
+# Tick Lock 3D: Project Handoff
 
-> Written 2026-11-18 for the next AI agent (or developer) continuing this project.
-> Read this file first, then `tick-lock-game-design.md` (game rules) and
-> `docs/superpowers/specs/2026-11-17-tick-lock-3d-visual-design.md` (visual spec).
+> Rewritten 2026-11-18 for the next AI agent (or developer) on this project. It replaces an older handoff that described
+> a demo driver and a post-processing chain that no longer exist.
+> **The code is the source of truth.** Where this file, `tick-lock-game-design.md` or the visual spec disagree with the
+> code, trust the code (section 13 lists the known gaps).
 
 ---
 
 ## 1. What this is
 
-**Tick Lock** is a one-button timing game for the **CMM (multimedia program) booth at KMUTT Open House 2026**.
-- A glowing needle sweeps around a lock dial. The player presses **Pick** while the needle is inside a zone.
-- Every hit **reverses the needle**, so the player can't settle into a rhythm.
-- The clock is the player's health. A run should last about 30 seconds so the booth queue keeps moving.
+**Tick Lock** is a one-button timing game for the **CMM (multimedia) booth at KMUTT Open House 2026**.
 
-The project is a **3D web version** built with **Three.js**. The lock and studio models are made in **Blender**, driven by the Blender MCP through Python scripts.
+- A glowing needle sweeps around a lock dial. The player presses **Space** while the needle is inside a zone.
+- Every hit **reverses the needle**, so there is no rhythm to settle into.
+- The clock is the player's health. A run should last about 30 to 60 seconds so the booth queue keeps moving.
+- Visitors walk up, play once and leave a name on today's leaderboard.
 
-**Theme: "Studio Lock" in a late-night studio.**
-- A chunky padlock whose dial is a **vinyl record**, on a desk in a creative or multimedia studio at night.
-- Props: a speaker, a camera on a tripod, a monitor, headphones, two softboxes, a desk lamp and an ON AIR sign.
-- The mood follows a reference screenshot the user supplied (Dota 2's lock-picking minigame): low-key warm light, darkness, vignette, a violet beam needle with sparkles, and calm cream small-caps UI.
-- **Only the mood and layout were borrowed. The art and setting are original.** Do not copy that game's dungeon, candles or art.
+It is a **3D web game**: Three.js r187, plain ES modules, no build step, fully offline (three.js and fonts are vendored,
+because the booth may have no Wi-Fi). The studio scene is modelled in **Blender** and exported to `assets/studio.glb`.
+
+**Theme, "Studio Lock" at night:** a chunky burnt-orange padlock whose dial is a vinyl record, on a desk in a dark
+multimedia studio (speaker, camera on a tripod, monitor, headphones, two softboxes, desk lamp, ON AIR sign). The mood
+(warm pools of light, darkness, vignette, a violet beam needle with sparkles) follows a reference screenshot of another
+game's lock-picking minigame. **Only the mood was borrowed; the art and setting are original. Do not copy that game.**
 
 ---
 
-## 2. Current status (2026-11-18)
+## 2. Status
 
 | Area | Status |
 |---|---|
-| Game design doc (rules, balance, levels) | ✅ Complete: `tick-lock-game-design.md` |
-| Visual direction and spec | ✅ Complete: `docs/superpowers/specs/2026-11-17-tick-lock-3d-visual-design.md` (§2.1 is the current look) |
-| Blender studio model | ✅ About 39k triangles, worn textures baked, exported to `assets/studio.glb` (about 1.7 MB) |
-| Three.js visual prototype | ✅ Scene, lighting, dial, needle, HUD, effects, studio reactions and screens all work |
-| Performance | ✅ About 11.8 ms GPU per frame at 1631×918 on Intel UHD (60 fps budget), plus adaptive fallback |
-| **Real gameplay rules** | ❌ **Not done.** `src/demo.js` is a temporary stand-in loop. **This is the next big task** (see §10) |
-| Audio | ❌ Not done (spec in design doc §9) |
-| Leaderboard, music, extra zone types | ❌ Future ideas (design doc §12) |
+| Gameplay rules | ✅ `src/game.js`: levels, endless mode, time economy, graze, recovery zone, flow state, L6+ drifting zones, fatal freeze-frame |
+| 3D scene, dial, needle, effects | ✅ Done (`BEAM_W = 0.082`, slower mid-game speeds, 45% shrink floor, sentence-case HUD & callouts) |
+| Main menu, boot screen, start cue | ✅ Redesigned 2026-11-18 (section 7) |
+| Leaderboard (local, top 10, avatars, daily auto-reset, CSV export) | ✅ `src/main.js` and `localStorage` |
+| Audio | ✅ `src/audio.js`, synthesised WebAudio events + procedural studio beat (`audio.update()`) |
+| Pause menu | ✅ `src/pause3d.js`, a plane inside the 3D scene (restyled to match the menu) |
+| Performance | ✅ Optimised 2026-11-18: about 83 to 164 fps on the dev laptop (section 11) |
+| Old panels (game over, leaderboard, settings, pause) restyle | ✅ Restyled to Hallmark tokens and sentence case (`sloplint`: 0 FAIL) |
+| Docs in sync with code | ✅ `tick-lock-game-design.md` and visual spec updated to match code |
 
 ---
 
-## 3. How to run
+## 3. Running it
 
 ```bash
-# from the project root (TickLock/)
-npx serve .            # any static server works; prints the URL/port
+# from the project root (TickLock/); any static server works
+python -m http.server 8642 --bind 127.0.0.1     # or: npx serve .
 ```
-- Open the printed URL, for example `http://localhost:57443`. Port 5173 on this machine belongs to another of the user's projects, so `serve` may choose a random port.
-- **It must be served over HTTP.** Browsers block `assets/studio.glb` when the page is opened from `file://`.
-- Everything is local and offline: Three.js, the add-ons and the fonts are vendored, so no CDN is needed (the booth may have no Wi-Fi).
-- `?fast` in the URL starts at a lower render scale, for weak GPUs.
 
-**Demo controls** (temporary, defined in `src/demo.js` and `src/main.js`)
+- Open `http://127.0.0.1:8642/`. It **must be served over HTTP**; `file://` blocks the module scripts and the `.glb`.
+- Port 5173 on this machine belongs to another of the user's projects; pick something else.
+- `?fast` starts at a lower render scale (0.7) with a smaller buffer cap, for weak GPUs.
 
-| Input | Action |
+### Controls (keyboard is the booth's only input)
+
+| Where | Keys |
 |---|---|
-| Space / Enter / click on the canvas / PICK button / gamepad A | Start, pick, retry |
-| Shift / hold BOOST button / gamepad RB or RT | Boost (needle ×1.8 speed, score ×2) |
-| P / Esc / PAUSE button | Pause |
-| 1 · 2 · 3 · 4 · 5 · 6 · 7 · 0 | Force hit · perfect · blue · miss · level up · toggle boost · game over · back to title |
-| F | Show fps, frame time and pixel ratio overlay |
+| Menu | ↑/↓ or W/S choose, Enter or Space select, L leaderboard, G settings, F fps overlay |
+| How to play panel | Space / Enter "Got it", Esc or ✕ also closes it (either way leads to the start cue) |
+| Start cue | Space / Enter starts the run, Esc back to the menu |
+| In a run | Space / Enter pick, hold Shift boost, P or Esc pause, H how to play, L leaderboard, G settings, F fps |
+| Paused (3D menu) | ↑/↓ choose, Enter / Space select, R restart, M main menu, P resume, G settings |
+| Game over | Space retries (after a 0.6 s lock), plus the panel's buttons |
+| Debug, any screen but modals | `1` hit, `2` perfect, `3` blue, `4` miss, `5` level up, `6` toggle boost latch, `7` game over, `0` title |
 
-**Debug hook:** `window.__ticklock = { state, perf, stage, noAdapt }`.
-- `state` is the demo state.
-- `perf` holds `avgMs`, `pixelRatio` and `tier`.
-- `stage` is the object returned by `createStage()`.
-- Set `window.__ticklock.noAdapt = true` to freeze the adaptive quality while you benchmark.
+Mouse, touch and gamepad (A = pick, RB/RT = boost) still work but are secondary.
+
+**Debug hook:** `window.__ticklock = { state, perf, stage }`. `state` is the live game state, `perf.avgMs` the
+one-second average frame time, `stage` the object from `createStage()`.
 
 ---
 
-## 4. File map
+## 4. Repository and working rules
+
+- **Git:** initialised 2026-11-18 on `master`.
+  - `a573f1b` snapshot before the menu redesign
+  - `68a5592` main menu redesign, boot screen, start cue, panel copy
+  - Latest commit covers the 165 Hz performance pass, needle/balance tuning, Hallmark panel & 3D pause restyle, drifting zones, procedural beat, automatic daily leaderboard reset, sentence-case HUD unification, dead-code removal, and doc sync.
+- **Commit only when the user asks.** End commit messages with the attribution line the harness gives you.
+- `.gitignore` excludes `/graft/` (a code-index tool, not part of the game), `/.playwright-mcp/` (browser-test screenshots) and `*.blend1`.
+
+---
+
+## 5. File map
 
 ```
 TickLock/
 ├── HANDOFF.md                     ← this file
-├── tick-lock-game-design.md       ← GAME RULES (source of truth for gameplay/balance)
-├── docs/superpowers/specs/
-│   └── 2026-11-17-tick-lock-3d-visual-design.md   ← VISUAL SPEC (§2.1 = current late-night look, §5 = asset contract, §7 = perf)
-├── index.html                     ← canvas container, HTML overlay (controls, floats, flash, pause), import map
+├── tick-lock-game-design.md       ← game design doc (rules, constants, progression, booth notes)
+├── docs/superpowers/specs/2026-11-17-tick-lock-3d-visual-design.md
+│                                  ← visual spec (§2.1 late-night mood, §2.2 single-pass & UI, §5 asset contract)
+├── index.html                     ← all DOM: boot screen, menu, start cue, panels, modals, controls; import map
 ├── src/
-│   ├── main.js    ← entry: font preload, builds stage/dial/hud/fx/demo, event bus, input, loop, adaptive quality
-│   ├── scene.js   ← renderer, camera, lights, fog, glb loading + part lookup, post-processing (bloom, glitch, final grade)
-│   ├── dial.js    ← zone band (one shader), violet beam needle, sweep trail, ring flash
-│   ├── hud.js     ← canvas textures: hub label (on the vinyl) + studio monitor
-│   ├── fx.js      ← particles (sparkles/bursts/dust), floating text, shake, glitch, light/prop reactions, shackle anim, camera rig
-│   ├── demo.js    ← TEMPORARY simplified game loop + debug keys (replace with real rules)
-│   └── style.css  ← overlay UI styles (Barlow Condensed font-face, controls, floating text, flash)
-├── assets/studio.glb              ← exported Blender scene (all studio parts, baked textures as JPEG)
-├── art/tick-lock-studio.blend     ← Blender source (+ .blend1 backup). Contains text block `tl_helpers.py`
-├── vendor/three/                  ← three.js r0.187.0 (build + examples/jsm: loaders, postprocessing, shaders, utils, environments)
-├── vendor/fonts/                  ← Barlow Condensed 500/600/700 woff2 (OFL license included)
-└── graft/                         ← code-graph index used by a tooling plugin (not part of the game)
+│   ├── main.js     ← entry: boot sequence, event bus, menu flow, leaderboard, settings, input, frame loop
+│   ├── scene.js    ← renderer, camera, lights, fog, glb load + material conversion, grade, halos, visuals settings
+│   ├── game.js     ← the game rules and state (createGame)
+│   ├── dial.js     ← zone band shader, violet beam needle, sweep trail, ring flash
+│   ├── hud.js      ← canvas textures on the record label (hub) and the studio monitor
+│   ├── fx.js       ← particles, floating text, light/prop reactions, ON AIR sign, shackle, camera rig
+│   ├── pause3d.js  ← pause menu drawn on a plane in the 3D scene, raycast clicks
+│   ├── audio.js    ← WebAudio oscillator sounds per game event
+│   ├── avatars.js  ← SVG avatars for the leaderboard
+│   └── style.css   ← all 2D UI styles and `:root` tokens
+├── assets/studio.glb              ← exported Blender scene (about 6.6 MB with baked JPEG textures)
+├── art/tick-lock-studio.blend     ← Blender source
+├── vendor/three/                  ← three.js r187 (build + examples/jsm)
+├── vendor/fonts/                  ← Barlow Condensed 500/600/700 woff2 + OFL licence
+└── .agents/skills/hallmark/       ← a design skill used for the UI redesign (tooling, not the game)
 ```
-No build step and no bundler. The code uses plain ES modules through the import map in `index.html` (`three` maps to `./vendor/three/build/three.module.js`, and `three/addons/` maps to `./vendor/three/examples/jsm/`).
+
+The import map in `index.html` maps `three` to `./vendor/three/build/three.module.js` and `three/addons/` to
+`./vendor/three/examples/jsm/`.
 
 ---
 
-## 5. Architecture and data flow
+## 6. Architecture
+
+### 6.1 Boot sequence (`main.js`, top-level `await`)
+
+1. The boot screen (`#boot`) is already visible from the HTML.
+2. Fonts load (`document.fonts.load` for Barlow Condensed 500/600/700); canvas text needs them first. Progress 0 to 10%.
+3. `createStage(container, onProgress)` loads `studio.glb`; the loader's byte progress drives 10 to 80%.
+4. `createDial`, `createHud`, `createFx`, `createAudio` (80 to 90%).
+5. `renderer.compileAsync(scene, camera)` compiles every shader behind the boot screen, so the first frame neither hitches nor flashes black (90 to 100%).
+6. The first real frame renders, then `boot.finish()` fades `#boot` out (0.6 s; a timeout covers reduced motion) and sets `booted = true`. Keys are ignored until then.
+7. If the `.glb` fails to load, the boot screen shows "The studio could not load. Refresh the page to try again."
+
+### 6.2 Frame loop
 
 ```
-main.js
-  ├─ await fonts → createStage(container)  (scene.js)  → stage {renderer, scene, camera, composer, bloom, glitch, grade, lights, parts, rig, render(), resize(), setPixelRatio(), maxPixelRatio}
-  ├─ createDial(stage)            (dial.js) → dial {update(dt, view), ringFlash(hex, k), group, needle}   ; stage.dial = dial
-  ├─ createHud(parts, maxAniso)   (hud.js)  → hud  {update(dt, state), react(evt, data)}
-  ├─ createFx(stage, dom)         (fx.js)   → fx   {update(dt, state), react(evt, data), setParallax(nx, ny)}
-  ├─ emit = (evt, data) => { fx.react(evt, data); hud.react(evt, data); }
-  └─ createDemo(emit)             (demo.js) → demo {state, update(dt, input), pick(), debugKey(k), togglePause()}
-
-per frame (requestAnimationFrame):
-  pollPad() → demo.update(dt, input) → dial.update(dt, view) → hud.update(dt, state) → fx.update(dt, state) → stage.render()
-  every ~1 s: perf.avgMs → adaptQuality()
+pollPad → game.update(dt, input) → dial.update → hud.update → fx.update → pause3d.update(fx.updatePauseCam) → stage.render
+then: body data attributes (written only on change), menu visibility, in-run tip banner, fps once a second
 ```
 
-### 5.1 The state object, which `hud` and `fx` read every frame
-The game logic must provide this shape. The demo provides it now.
-```js
-{
-  mode: 'title' | 'play' | 'over',
-  paused: boolean,
-  needleAngle: number,   // radians, 0 = 12 o'clock, + = clockwise (as seen by player)
-  dir: 1 | -1,           // +1 clockwise
-  boost: boolean,
-  time: number,          // seconds remaining (clock = health)
-  score: number, combo: number, level: number, hits: number, perfects: number,
-  best: number,          // localStorage 'ticklock_best'
-  runTime: number,       // seconds since start (monitor timecode)
-  retryReady: boolean,   // game over input lock (0.6 s) elapsed
-  zones: [ { angle, half, baseHalf, kind: 'gold'|'blue', pop: 0..1, alpha: 0..1, age, life } ]
-}
-```
-`dial.update` receives `{ needleAngle, dir, boost, zones }`. Each zone uses `half` (current half-width in radians), `baseHalf` (half-width at spawn, drawn as the shrink outline), `pop` (scale for the pop-in) and `alpha` (for the blink).
+`dt` is capped at 50 ms. The loop runs at the display's refresh rate (165 Hz on the dev laptop).
 
-### 5.2 Events (the `emit(evt, data)` contract)
+### 6.3 Events (`emit(evt, data)` goes to fx, hud, audio, then `onGameEvent` in main.js)
 
-| Event | Data | Who reacts |
+| Event | Data | Notes |
 |---|---|---|
-| `start` | — | fx: shackle opens, lights normal. hud: clears cards |
-| `title` | — | fx: shackle opens. hud: clears |
-| `hit` | `{ angle, kind, perfect, points }` | fx: burst, ring flash, floating "+points", "PERFECT" plus screen flash, light swell, speaker pump. hud: waveform spike |
-| `blue` | `{ angle }` (sent in addition to `hit`) | fx: "+2s" text. hud: "+2s TIME BONUS" card |
-| `miss` | `{ angle }` | fx: red ring, "−1.5s", shake, RGB glitch, red grade tint, lamp buzz, ON AIR stutter. hud: monitor glitch |
-| `levelup` | `{ level }` | fx: "LEVEL n +2s", ON AIR flare, light swell. hud: "LEVEL n" card |
-| `gameover` | state copy | fx: shackle snaps shut, lights dim to red, vignette closes. hud: results card |
+| `start` | none | new run; main sets `phase = 'run'`; fx lights the ON AIR sign with a neon flicker |
+| `title` | none | back to menu; main sets `phase = 'menu'` |
+| `hit` | `{ angle, kind, perfect, points, combo, flow }` | kind is `gold`, `blue` or `recovery` |
+| `blue` | `{ angle }` | extra, after `hit` |
+| `recovery` | `{ angle, combo }` | extra, after `hit` on a recovery zone |
+| `flow` | `{ angle, combo }` | entering flow state (combo 10) |
+| `graze` | `{ angle, deg, timing }` | near miss within 6°; timing is `EARLY` or `LATE` |
+| `miss` | `{ angle, deg, timing }` | full miss; spawns a recovery zone |
+| `fatal` | `{ angle, text }` | clock hit zero; 0.45 s freeze-frame follows |
+| `levelup` | `{ level }` | |
+| `gameover` | copy of the state | game-over panel and leaderboard entry |
 
-### 5.3 Coordinate and angle conventions (important)
-- Three.js uses **Y-up**. Blender is Z-up, and the glTF exporter converts, so Blender `(x, y, z)` becomes Three.js `(x, z, −y)`.
-- The **dial center is at the world origin.** The dial faces **+Z**, toward the camera.
-- A point on the dial is `dialPoint(angle, r, z)` from `scene.js`, which returns `(r·sin θ, r·cos θ, z)`. Angle 0 is up, and angles increase clockwise.
-- The needle pivot uses `rotation.z = −needleAngle`.
-- The zone shader uses `atan(x, y)`, the same convention.
+### 6.4 Game state (`game.js`, read every frame by dial, hud, fx)
 
-| Measure | Value |
-|---|---|
-| Vinyl face plane | z = 0.08 |
-| Zone band drawn at | z = 0.084 |
-| Needle beam at | z = 0.118 |
-| Hub label front | z ≈ 0.095 |
-| Zone band radius | 0.62 to 0.92 |
-| Hub radius (label) | 0.40 |
-| Hub ring | to 0.455; the needle base sits here (`DIAL.HUB_R`) |
-| Needle tip | 1.0 |
-| Lock body | 3.0 wide × 3.5 tall, bottom at y = −2.0 (desk top). The shackle is lifted +0.38 in Three.js while playing |
+`mode` (`title` / `play` / `over`), `paused`, `needleAngle` (radians, 0 = 12 o'clock, clockwise positive), `dir`,
+`boost`, `time` (seconds left), `score`, `combo`, `maxCombo`, `level`, `hits`, `levelHits`, `levelGoal`, `perfects`,
+`runTime`, `best`, `flow`, `clockStarted` (the clock waits for the first hit), `freezeT`, `fatalText`,
+`ghost { angle, alpha }` (marker of the last miss), `zones[]`
+(`{ angle, half, baseHalf, kind, age, life, pop, alpha, drift }`), `retryReady`.
 
-### 5.4 Camera
-- `CAMERA_HOME (0, 0.15, 10)`, looking at `(0, 0, 0)`, 23° vertical FOV at 16:9. This is a gameplay-focused zoom: the dial fills about 55% of the screen height and the top of the shackle is cropped.
-- On narrow screens the FOV widens so the whole lock body (half-width 1.85 with margin) stays visible.
-- The title screen adds a slow dolly and mouse parallax (in `fx.js`, through `stage.rig.offset`). The camera never moves during play, apart from the miss shake.
-- At runtime the monitor is moved and scaled to 0.8 (`Prop_Monitor` at `(2.95, −0.64, −1.2)`) so its cards stay on screen at this zoom.
+### 6.5 Rules, as coded in `game.js`
 
----
+- `LEVELS` rows are `[hits, speed rad/s, width °, zone count, lifetime s, blue chance]`, 8 levels, then endless (+0.1 rad/s per level, zones widened so the window stays at least 100 ms).
+- `START_TIME 30`, `HIT_TIME 0.45`, `BLUE_TIME 2`, `LEVEL_TIME 2`, `MISS_TIME 1.2`, boost ×1.8 speed and ×2 score, perfect = middle 30% of a zone (×2).
+- Score per hit: `100 × (1 + 0.1·combo) × (perfect ? 2 : 1) × (boost ? 2 : 1) × (flow ? 1.25 : 1)`.
+- Graze (within 6° of a zone edge): −0.4 s, combo halved. Miss: −1.2 s, combo saved for a recovery zone (2.8 s life) that restores half the combo and refunds the 1.2 s.
+- Before the first hit the clock is paused and misses are free practice.
+- At most one blue zone at a time; blue zones live 0.7× as long. Zones shrink from level 4 (down to 45% width; 60% for recovery) and blink in their last 0.8 s. From level 6, regular zones may drift smoothly around the ring and bounce off neighbors.
+- The in-run tutorial banner (`#tutorial-banner`) prompts the first hits.
 
-## 6. Rendering pipeline (`scene.js`)
+### 6.6 Coordinates
 
-- **Renderer:** `antialias: false` (the composer renders to its own target anyway). `toneMapping = ACESFilmic` is set but only used as a flag; tone mapping actually happens in the final pass.
-- **Pixel ratio:** `min(max(devicePixelRatio, 1), 1.25) × RENDER_SCALE`, where `RENDER_SCALE` is 0.85 (0.7 with `?fast`). The floor is 0.6.
-- **Scene:** background and fog are `#0B0A12` (`FogExp2` density 0.07). The environment is a PMREM of `RoomEnvironment` at intensity 0.12, just so the metal reads.
-
-**Lights** (5 in total; `fx.js` animates them from `userData.base`)
-
-| Light | Settings |
-|---|---|
-| `hemi` | `HemisphereLight(0x3a3550, 0x140c08, 0.25)` |
-| `key` | `SpotLight(0xffb36b, 85, 0, 0.32 rad, penumbra 0.7, decay 2)` at (0.8, 4.2, 6.5), aimed at the dial. This is the warm pool that makes the lock the focus |
-| `rim` | `DirectionalLight(0x8b7cff, 1.1)` from behind |
-| `lamp` | `PointLight(0xffa64d, 6, 6, 2)` at `Lamp_Bulb` (tungsten flicker in `fx`) |
-| `sign` | `PointLight(0xff4a2a, 3, 5, 2)` at `Sign_OnAir` (slow hum) |
-
-**Material tweaks at load time**
-- Accent plastics (`/Accent_(Magenta|Cyan)/`) have their color multiplied by 0.45 so they sink into the dark.
-- `Room_*`, `Prop_Desk*` and the softbox poles are converted to `MeshLambertMaterial` for performance.
-
-**Post-processing:** `RenderPass` → `UnrealBloomPass(0.7, 0.6, 0.8)` → `ShaderPass(RGBShift)` → `ShaderPass(GradeShader)`.
-- **The bloom runs at quarter resolution.** Its `setSize` is wrapped to receive w/2 and h/2.
-- **The RGB-shift glitch pass is only enabled during a miss.**
-- **`GradeShader` is the final pass**, replacing OutputPass and FXAA. It does exposure, ACES filmic (functions prefixed `tl…`, because Three.js already injects `RRTAndODTFit` into ShaderMaterials) and linear→sRGB, then the grade:
-  - saturation 0.85
-  - soft S-curve
-  - split-tone: navy shadows, amber highlights
-  - `uRed` tint for misses and game over
-  - oval vignette, `uVignette` 0.55, rising to 0.8 on game over
-  - animated film grain 0.035
-
-  `fx.js` drives `grade.uniforms.uRed` and `uVignette`.
-- **Context-loss safety:** on `webglcontextlost` the page reloads itself after 600 ms. The post-processing chain can't be rebuilt in place. The Intel GPU did reset several times during development, especially when a second WebGL page was open or right after a Blender Cycles bake.
+- Three.js is Y-up; the glTF export converts Blender `(x, y, z)` to `(x, z, −y)`.
+- The dial centre is the world origin and faces +Z (the camera). `dialPoint(angle, r, z)` in `scene.js` returns `(r·sin θ, r·cos θ, z)`. The needle pivot uses `rotation.z = −needleAngle`; the zone shader uses `atan(x, y)`, the same convention.
+- `DIAL = { R_IN 0.62, R_OUT 0.92, FACE_Z 0.08, HUB_R 0.455, TIP_R 1.0, MAX_ZONES 6, PERFECT 0.3 }`.
+- Camera home `(0, 0.15, 10)` looking at the origin, 23° vertical FOV at 16:9. The FOV widens on narrow screens so the lock body stays in frame. The menu adds a slow dolly and mouse parallax; the pause menu pans the camera right. The monitor is moved to `(2.95, −0.64, −1.2)` and scaled 0.8 at load.
 
 ---
 
-## 7. The modules in detail
+## 7. Main menu and screen flow (redesigned 2026-11-18)
+
+The user asked for a menu that feels "polished, not AI slop". Agreed direction: **put as much as possible in the 3D
+room, and keep the 2D layer minimal**.
+
+**`phase` in `main.js`** (separate from `game.state.mode`):
+
+```
+menu ──Play──▶ brief (How to play panel) ──close, any way──▶ ready ("Press Space to start") ──Space──▶ run
+  ▲                                                             │Esc
+  └────────────── title event (Main menu, M in pause, 0) ◀──────┘
+```
+
+- **Every time a player chooses Play**, the How to play panel opens. Closing it shows the start cue. Space starts the run and the cue is "wiped away": a violet needle sweeps across the line and each letter flicks up and out (CSS keyframes `cue-out` / `key-out`; the letters are split into spans at init).
+- **Play again** from game over and **Restart** from pause skip the panel (same player).
+- `primaryPress()` routes the canvas click and gamepad A through the same flow.
+
+**What is on the menu screen**
+
+- 2D overlay (`#title-ui`): "Muasoom Studio" over the TICK LOCK wordmark (top left); three choices **Play** (large), **Leaderboard**, **Settings**, with a violet bar on the selected one; a key legend (bottom left); "Developed by Litt1eStar" (bottom right); a soft left-side shade so text reads over the props. No boxes, numbers, `//` separators or tracked capitals.
+- In the 3D room: the record label shows only "Best score" and the number; the **monitor shows today's top five**; the **ON AIR sign is dim on the menu and lights up when a run starts**.
+- **The user's must-keep list:** "Muasoom Studio", "Litt1eStar", Play, Leaderboard, Settings, and the leaderboard shown somewhere other than beside the three buttons (it lives on the monitor).
+
+**Other panels** (restyled to the same dark studio slate, hairline brass rules, `:root` tokens, and plain sentence case): game over (`#gameover-panel`, name and avatar entry), leaderboard modal (studio podium, top 10, "your run" bar, "Clear today's scores" needing a second press, Export CSV), settings panel (quality preset, render scale, brightness, contrast, saturation, glow, vignette, particles), How to play modal.
+
+**Keyboard focus:** opening a panel moves focus to its main button (`tut-play`, `lb-close-btn`, `sp-preset`). Every control has an instant `:focus-visible` brass outline. While focus is inside the settings panel, its controls keep their native keys.
+
+---
+
+## 8. Rendering (`scene.js`)
+
+- **No post-processing composer.** Glow comes from additive sprites ("halos") on the lamp and ON AIR sign and from additive shaders on the dial and needle. `stage.grade` holds `uRed` and `uVignette` driven by `fx.js` to fade the CSS atmospheric layers.
+- **Renderer:** `antialias: false`, `powerPreference: 'high-performance'`. Pixel ratio = `min(max(dpr, 1), 1.15) × visuals.scale` (0.9 by default, 0.7 with `?fast`), floor 0.55, and the buffer width is capped (1536 px balanced, 1152 performance preset, 2048 ultra) to protect integrated GPUs.
+- **Tone mapping:** `THREE.CustomToneMapping`. `scene.js` replaces three's empty `CustomToneMapping` slot in `ShaderChunk.tonemapping_pars_fragment` with ACES followed by a **contrast and saturation grade** read from one shared uniform `uGrade = (contrast − 1, saturation − 1)`. `Material.prototype.onBeforeCompile` attaches that uniform to every material. The settings sliders update it live with no recompiling. This replaced a CSS `filter` on the canvas. Custom `ShaderMaterial`s (dial, needle, particles, beam) do not run three's tone mapping and so are not graded, which is intended.
+- **Exposure** = `0.96 × brightness` (settings). Scene background and fog: `#090B16`, `FogExp2` 0.075.
+- **Lights** (base values in `userData.base`, animated by `fx.js`): hemisphere `0x4c5c92 / 0x261810, 0.65`; key `SpotLight 0xffbe7a, 130, angle 0.44, penumbra 0.85` at `(0.2, 3.8, 6.4)`; rim `DirectionalLight 0xffa656, 2.5`; lamp `PointLight 0xff9e44, 13, 8.5, 1.7` at the bulb; ON AIR `PointLight 0xff4a2a, 5, 6.5, 1.8`.
+- **Materials at load:** glTF gives every object a `MeshStandardMaterial`. Without an environment map that only ever shows diffuse plus a highlight, so `cheapMaterial()` converts:
+  - non-metals → `MeshLambertMaterial` (colour, map, emissive kept)
+  - metals (metalness ≥ 0.5) → `MeshPhongMaterial` with diffuse × (1 − metalness), specular = F0 × `METAL_SPEC` (0.2) and shininess from roughness
+  - `Lock_Shackle` and `Dial_Vinyl` keep their hand-tuned `MeshPhongMaterial` with a procedural micro-normal map (the `HERO_LOCK` regex only matches those exact names)
+  - `Dial_Label` and `Monitor_Screen` are left for `hud.js`, which gives them unlit canvas materials
+  - accent plastics (`/Accent_(Magenta|Cyan)/`) are darkened ×0.45
+- **Vignette and miss tint** are two full-screen CSS layers (`#stage::before`, `#stage::after`) with fixed gradients; `scene.render()` only changes their `opacity` through `--vig` and `--red-tint`, so they never repaint. The canvas sits at `z-index: -1` inside `#stage` so those layers draw above it.
+- **Context loss:** on `webglcontextlost` the page reloads after 600 ms.
+
+---
+
+## 9. Modules
 
 ### `dial.js`
-- `DIAL = { R_IN 0.62, R_OUT 0.92, FACE_Z 0.08, HUB_R 0.455, TIP_R 1.0, MAX_ZONES 6, PERFECT 0.3 }`.
-- **Zone band:** a single `RingGeometry` with a `ShaderMaterial`. Uniform arrays `uZone[6]` (`vec4`: angle, half, baseHalf, kind) and `uZoneFx[6]` (`vec2`: pop, alpha). The shader draws:
-  - gold or blue zones with a radial "bevel" brightness
-  - the Perfect core (middle 30%, warm white)
-  - darker rims at the zone ends
-  - a soft ember halo just outside each zone
-  - the shrink outline at the original size
-  - the sweep trail behind the needle (violet, longer on boost)
-  - a whole-band flash (`ringFlash(hex, k)`)
-- Colors are `EMBER 0xffb347 ×1.0`, `blue 0x39d5ff ×1.0`, `WARM_WHITE 0xfff1d6 ×0.95`, and trail `VIOLET 0x8b7cff` (exported).
-- **Needle:** an additive `ShaderMaterial` quad (`BEAM_W` 0.075) from the hub edge to just past the tip. It has a bright core line, a gaussian glow, a comet-bright tip and faded ends, plus a small dark metal collar. The color lerps to `PALETTE.blue` on boost, and intensity goes from 1.9 to 2.4.
+One `RingGeometry` with a `ShaderMaterial` draws the whole band: up to 6 zones (`uZone` vec4: angle, half, baseHalf, kind; `uZoneFx` vec2: pop, alpha), the perfect core, halos, shrink outlines, ghost marker, sweep trail, ring flash, flow aura, rim ticks. Colours: ember `0xffae2b`, recovery `0x42ffa1`, perfect `0xffe7a8`, needle `VIOLET 0x7b8cff` (exported). The needle is a razor-slim additive shader quad (`BEAM_W = 0.082`, `taper = mix(0.22, 0.10, along)`).
 
 ### `hud.js`
-- **Two canvas textures**, with `flipY = false` (glTF UV convention), sRGB, anisotropy at most 4, and a CPU-backed context (`willReadFrequently`). That last setting is important: GPU-backed 2D canvases stall when uploaded to WebGL.
-- **Hub** (`Dial_Label`): drawn in 512 design units and stored at ×1.5 (768²). It is redrawn **only when its content changes**, tracked with a key string of mode, time, score and so on.
-  - Background: a pre-rendered slate disc with stone grain and an inner shadow.
-  - Title mode: "TICK LOCK", the best score and a blinking "PRESS SPACE / TAP".
-  - Play mode: "TIME REMAINING" (letter-spaced), the big time (warm red and pulsing under 5 s), "SCORE", the score, then ×combo and LV.
-  - Over mode: "LOCKED OUT", the score and "PRESS TO RETRY".
-- **Monitor** (`Monitor_Screen`): 1024×576 at ×1, redrawn at **20 Hz**.
-  - Shows a REC dot with a timecode and "TICK LOCK".
-  - Title card; play mode has the waveform (56 bars, spiking on hits, faster on boost) with COMBO and LV.
-  - Event cards ("+2s", "LEVEL n") and the results table on game over.
-  - On a miss, a glitch (slice offsets, red tint, "−1.5s").
-  - Its material color is 0.55 during play (a dim glow) and 0.95 otherwise, so the cards are readable.
-- **Font:** Barlow Condensed (vendored). `main.js` awaits `document.fonts.load` before creating anything. `spaced()` uses the canvas `letterSpacing` property for the small caps.
+Two canvas textures with `flipY = false` (glTF UVs), sRGB, CPU-backed contexts (`willReadFrequently`; GPU-backed 2D canvases stall when uploaded). All text uses untracked sentence case matching the 2D UI.
+- **Hub** (`Dial_Label`): 512 design units at ×1.25 (640 px). Redrawn only when a key string of what it shows changes. Menu: "Best score" and the number. Play: "Time remaining" (pulses red under 5 s), "Score", combo (`Flow ×n` / `×n`), `Lv n`, lock-pin progress dots. Over: "Locked out", fatal detail, score, "Space to retry".
+- **Monitor** (`Monitor_Screen`): 1024×576 design units at ×0.75. **Animates at 15 Hz only during a run** (`Rec` timecode, waveform, event cards, miss glitch). On the menu (today's top five, fed by `hud.setBoard(board)`) and the results screen it redraws only when its content changes.
 
 ### `fx.js`
-- **Particles:** a custom `ShaderMaterial` points system with per-particle size, a twinkle (sin of time and seed), additive soft dots plus a little star cross. The pool is 400.
-  - `burst(angle, color, count, speed)` handles hits (amber), Perfect (warm white) and blue zones.
-  - **Sparkle trail:** 45 per second from the needle (14 per second on the title screen). Violet, lilac and white; cyan when boosting. They drift outward and behind the motion and live 0.6 to 1.1 s.
-  - **Dust:** 45 warm motes drifting up through the key-light pool.
-- **Floating text:** DOM elements projected from the dial (`.float`, `.float.big`). They animate with CSS and remove themselves.
-- **Reactions:** see the events table in §5.2. Also:
-  - tungsten flicker on the lamp and bulb
-  - a slow hum on the ON AIR sign
-  - softboxes "off", pulsing faintly on hits
-  - the speaker cone pumps
-  - the REC LED blinks at 1.6 Hz
-  - the shackle drops with a bounce on game over and opens on start or title
-  - camera shake and the RGB glitch on a miss
-- **Studio parts are optional:** the code checks for null on `Lamp_Bulb`, `Sign_OnAir_Glow` and the softbox panels.
+Particle pool (320) with one additive point shader: hit bursts, needle sparkles (20/s in play, 14/s on menu), 40 dust motes. Sentence-case floating DOM text projected from the dial. Reactions: light swells, perfect flash, shake, red tint, lamp flicker and buzz, softbox pulse, speaker pump, REC LED, shackle drop and bounce, camera dolly and parallax. **ON AIR sign:** `st.onAir` eases to 0.12 on the menu and 1 in play; on `start` it does a 0.55 s neon-ignition flicker (skipped with reduced motion).
 
 ### `main.js`
-- Event bus, input (keyboard, pointer, buttons, gamepad polling), the loop, the fps overlay, and **adaptive quality**.
-- Adaptive quality is **one-way only**. After 3 s, two consecutive slow seconds (average over 25 ms) trigger a step: resolution −0.15, then −0.15 again, then **bloom off**. Each step happens once, at most 3 in total.
-- **Never make it adjust both ways.** An earlier version raised and lowered the resolution every second, and each change reallocated the render targets, which caused **black flashes** the user saw.
+Boot, event bus, menu phase machine, modals, leaderboard and run log, settings, input, frame loop.
+- **localStorage keys:** `ticklock_leaderboard` (top 10), `ticklock_lb_date` (`YYYY-MM-DD`, resets the daily board, `ticklock_run_seq`, and `ticklock_best` automatically on a new calendar day while keeping `ticklock_history`), `ticklock_history` (every saved run across days, for CSV), `ticklock_run_seq` (auto names "PLAYER #n"), `ticklock_best`, `ticklock_settings`.
+- **`SEED_BOARD`** fills the board with **sample names and scores** (LITT1ESTAR 14,800 and so on) only when `ticklock_leaderboard` has never been initialised. Press "Clear today's scores" in the leaderboard before the booth opens, or the sample scores will show as real.
+- A run that ends without pressing Save is auto-saved as "PLAYER #n" when the next run starts or the menu opens.
+- `adaptQuality()` performs a single one-way fallback (`stage.visuals.particles = false`) if average frame time exceeds 28 ms for 2 s, without ever reallocating render buffers mid-game.
 
-### `demo.js` (temporary)
-- A simplified loop: the needle moves with `dir·speed·(boost ? 1.8 : 1)`.
-- Zones spawn at least 0.7 rad plus a half-width away from the needle, with no overlap. They pop in over 0.15 s, shrink when `life > 0`, blink in their last 0.8 s, and are replaced when they expire.
-- A pick finds a zone where `|wrap(needle − zone.angle)| ≤ half`. Perfect means the distance is within `0.3·half`.
-- A hit reverses `dir`, scores `100·(1 + 0.1·combo)·(perfect ? 2 : 1)·(boost ? 2 : 1)` and adds time.
-- The clock drains at only 0.35× in the demo, and it levels up every 6 hits.
-- `DEMO_LEVELS` only approximates the real table.
+### `pause3d.js`
+A 1024×768 canvas on a plane at `(2.95, 0.04, 0.45)`; the camera pans to it. Items Resume / Restart / Settings / Main menu styled to match the Hallmark main menu (sentence-case labels, needle-violet active bar, brass keycaps, hairline borders).
+
+### `audio.js`
+Oscillator tones per event (start, hit, blue, recovery, flow, graze, miss, levelup, fatal, gameover) plus `audio.update(dt, s)`, a procedural clockwork tick + sub-bass pulse scaling with level and Boost (with a harmonic shimmer during Flow State) while the timer runs. The context unlocks on the first key or click.
 
 ---
 
-## 8. Blender asset pipeline
+## 10. UI and CSS system (`style.css`)
 
-- **Source file:** `art/tick-lock-studio.blend`.
-  - The `TickLock` collection holds everything that gets exported.
-  - The `Preview` collection holds a `PreviewCam` and preview lights; it is not exported.
-- **Helpers:** the text block **`tl_helpers.py`** inside the .blend. Load it with `exec(bpy.data.texts['tl_helpers.py'].as_string())`. It provides:
-  - `lin(hex)`: sRGB hex to linear RGBA
-  - `mat(name, hex, rough, metal, emit, strength)`
-  - `box`, `cyl`, `lathe(name, [(r, y)...])` (a profile spun around the dial's Y axis), `curve_tube`, `set_origin`
-  - `finish(ob, w, segs, angle)`: an angle-limited BEVEL (harden off), a WEIGHTED_NORMAL modifier (keep sharp), smooth shading, and sharp edges above 30°
-  - `add_cyl(bm, ...)`: adds a cylinder into a bmesh
-  - `biggest_face`, `recess(bm, face, lip, depth)`: an inset trim lip plus a chamfered recess
-  - `set_mats(ob, names)`, which **preserves per-face material indices**. `me.materials.clear()` resets them to 0, a bug that was hit and fixed.
-- **Required object names:** the game warns if any are missing.
-  - `Lock_Body`, `Lock_Shackle`, `Lock_Badge`, `Dial_Vinyl`, `Dial_Label`
-  - `Prop_Softbox_L/R`, `Softbox_L/R_Panel`
-  - `Prop_Camera`, `Camera_REC`
-  - `Prop_Monitor`, `Monitor_Screen`
-  - `Prop_Headphones`, `Prop_Speaker`, `Speaker_Cone`, `Prop_Desk`
-  - `Room_Wall`, `Room_Foam`
-- **Optional object names:** `Prop_DeskLamp`, `Lamp_Bulb`, `Sign_OnAir`, `Sign_OnAir_Glow`.
-- **Pivots that matter:**
-  - The dial objects sit at the origin.
-  - `Lock_Shackle`'s origin is at its left-leg hinge.
-  - `Speaker_Cone`'s origin is at the cone center, because it is scaled to pump.
-  - Root props keep their placement rotations; rotation was deliberately not applied, because that would shift their children.
-- **UVs:**
-  - `Dial_Label` has planar UVs: `u = 0.5 + x/0.8`, `v = 0.5 + z/0.8`.
-  - `Monitor_Screen` has planar UVs over 0 to 1 at 16:9.
-  - **Never smart-project these two.** The canvas textures depend on their UVs.
-  - Everything else uses smart-project UVs (margin 0.02).
-- **Baked worn textures** (Cycles EMIT bake of base × AO, plus noise grime, plus Bevel-node edge wear): `Lock_Body` (2K), `Dial_Bezel`, `Lock_Shackle`, `Prop_Desk`, `Prop_Speaker`, `Prop_Monitor` (1K).
-  - Each baked object has per-object material copies named `<Material>__<Object>`, using the image `T_<Object>_BaseColor` (packed).
-  - **If you remodel a baked object, re-bake it.** It needs UVs first: the `Dial_Bezel` bake once failed because rebuilding the bezel had dropped its UVs.
-- **Material names** use the `M_` prefix, for example `M_Primary_Body` (burnt orange `#B8652E`), `M_Metal_Trim`, `M_Metal_Bezel`, `M_HubRing` (aged brass), `M_Accent_Dark`, `M_Emissive_*`, `M_Wood_Top` and `M_Vinyl`. The procedural noise and bump nodes only show inside Blender; glTF doesn't export them.
-- **Export (exact call):**
+- **Font:** Barlow Condensed only (500/600/700, `font-display: block`).
+- **Tokens** in `:root`: all colours across the menu, panels, modals, leaderboard podium, and tutorial diagrams are declared as CSS custom properties (`--navy`, `--surface*`, `--cream*`, `--brass*`, `--violet*`, `--red*`, `--core-white`, `--rec-green*`, `--rule`, `--shade*`, `--scrim`, `--gutter`, `--ease-out`, `--vignette-ink`, `--miss-red`).
+- **Hallmark stamp:** the first lines of `style.css` are a comment stamp, a critique line and a single `.cue-needle`/`.boot-needle` glow waiver from the Hallmark design skill. Keep them at the top.
+- **Rules followed across the UI:** sentence-case labels without letter-spacing (capitals only for the wordmark), 4 px spacing rhythm, animations use only `transform` and `opacity`, every animation has a `prefers-reduced-motion` fallback, instant `:focus-visible` outlines, `:disabled` styling, no emoji icons (close buttons are inline SVG).
+- **Linter:** `node .agents/skills/hallmark/scripts/sloplint.mjs index.html src/style.css --genre atmospheric --scope app` passes with `0 FAIL` (only the intentionally waived `.cue-needle::before` `WARN 29`).
+
+---
+
+## 11. Performance (optimised 2026-11-18)
+
+**Dev machine:** Windows 11 laptop, Intel UHD (`0x9A60`) integrated GPU, **165 Hz display** (a 6.06 ms frame budget). The GPU throttles hard with heat and power: the same build measured anywhere from 6 ms to 55 ms per frame within one session. **Never compare runs taken minutes apart; serve the old and new builds side by side and alternate.**
+
+**Results** (old build vs new, alternated in one session):
+
+| | Before | After |
+|---|---|---|
+| Menu fps | 55 | 83 to 164 |
+| Frames at full 165 Hz | 10% | 39 to 71% |
+| During play | about 55 | 164 |
+| GPU time per frame | 7.2 to 7.5 ms | 3.5 to 4.4 ms |
+| JavaScript per frame | | about 1 ms |
+
+**What made the difference**
+
+1. The material conversion bug: an `!m.emissiveIntensity` check never fired (glTF sets it to 1), so the whole room ran `MeshStandardMaterial`. Fixed with `cheapMaterial()` (§8). This was the largest win.
+2. The CSS `filter` on the canvas moved into the shaders (§8).
+3. Vignette and miss tint made opacity-only, so misses no longer repaint the whole screen and a 120 px blur.
+4. Hub canvas from 1024² to 640²; no idle redraws.
+5. Monitor redraws only when needed outside a run.
+6. Body `data-*` attributes written only on change.
+
+**How to measure GPU time** (works on this ANGLE/D3D11 setup; `gl.finish()` does not block there):
+
+```js
+const { stage } = window.__ticklock, gl = stage.renderer.getContext();
+const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+// wrap stage.render: begin a TIME_ELAPSED_EXT query before, end after, read the result a frame or two later
+```
+
+**Pitfalls**
+
+- Playwright's Chrome window throttles to 1 fps when covered or minimised.
+- Do not run a second WebGL page against the game at once; it caused GPU context loss on this machine.
+- Never make quality adjust both ways at runtime. Re-allocating the render buffer every second once caused black flashes the user saw.
+- What is left costs little on its own (particles, light beam, dial shader, lights all measured within noise). The only big lever left is resolution, which the user does not want softer.
+
+---
+
+## 12. Blender asset pipeline
+
+- **Source:** `art/tick-lock-studio.blend`. Collection `TickLock` is exported; `Preview` (camera, lights) is not.
+- **Helpers:** text block `tl_helpers.py` inside the .blend, loaded with `exec(bpy.data.texts['tl_helpers.py'].as_string())`. It provides `lin`, `mat`, `box`, `cyl`, `lathe`, `curve_tube`, `set_origin`, `finish`, `add_cyl`, `biggest_face`, `recess`, and `set_mats` (which preserves per-face material indices; `me.materials.clear()` resets them).
+- **Required object names** (the game warns if missing): `Lock_Body`, `Lock_Shackle`, `Lock_Badge`, `Dial_Vinyl`, `Dial_Label`, `Prop_Softbox_L/R`, `Softbox_L/R_Panel`, `Prop_Camera`, `Camera_REC`, `Prop_Monitor`, `Monitor_Screen`, `Prop_Headphones`, `Prop_Speaker`, `Speaker_Cone`, `Prop_Desk`, `Room_Wall`, `Room_Foam`. **Optional:** `Prop_DeskLamp`, `Lamp_Bulb`, `Sign_OnAir`, `Sign_OnAir_Glow`.
+- **Pivots:** dial objects at the origin; `Lock_Shackle` origin at its left-leg hinge; `Speaker_Cone` at the cone centre (it is scaled to pump).
+- **UVs:** `Dial_Label` and `Monitor_Screen` have planar UVs that the canvas textures depend on. **Never smart-project them.**
+- **Baked worn textures** on `Lock_Body` (2K), `Dial_Bezel`, `Lock_Shackle`, `Prop_Desk`, `Prop_Speaker`, `Prop_Monitor` (1K), with per-object material copies `<Material>__<Object>`. Re-bake after remodelling, and make sure UVs exist first.
+- **Metalness and roughness from Blender now matter:** `cheapMaterial()` uses them to choose Lambert or Phong (§8).
+- **Export:**
   ```python
-  # select all objects in collection 'TickLock', then:
   bpy.ops.export_scene.gltf(filepath=r"...\assets\studio.glb", export_format='GLB', use_selection=True,
       export_apply=True, export_yup=True, export_cameras=False, export_lights=False,
       export_image_format='JPEG', export_jpeg_quality=85)
   ```
-  The Draco and meshopt compressors are available but deliberately unused, so the game needs no decoder files.
-- **Blender MCP note:** the add-on is behind (protocol 13 against an expected 16). `get_scene_info` output is truncated, so use `execute_blender_code` to inspect. The `look` tool works. The user has to run `uvx mcp-for-blender install-addon` themselves and restart Blender.
+  No Draco or meshopt, so no decoder files are needed.
+- **Blender MCP:** `get_scene_info` output can be truncated; use `execute_blender_code` to inspect, and `look` to see results.
 
 ---
 
-## 9. Visual direction and palette (current)
+## 13. Known gaps and loose ends
 
-| Element | Color / value |
-|---|---|
-| Room, background, fog | `#0B0A12` near-black |
-| Lock body | burnt orange `#B8652E`, worn (baked) |
-| Hub ring | aged brass `#B08A4E` |
-| Bezel and screws | worn iron `#2B2A2E` / `#3A3631` |
-| Gold zones | ember `#FFB347` |
-| Time (blue) zones | cyan `#39D5FF` |
-| Perfect core | warm white `#FFF1D6` |
-| Needle beam, trail, sparkles | **violet `#8B7CFF`**, cyan on boost |
-| Miss / danger | warm red `#FF5A46` / `#FF6A4D` |
-| UI text | cream `#EFE2C8` (55% for labels), font **Barlow Condensed** with letter-spaced small caps |
-| Controls overlay | plain right-aligned labels: PICK / SPEED BOOST (HOLD) / PAUSE. No pills; key hints only on hover |
-
-**Design rules agreed with the user**
-- Studio reactions last **0.3 s or less** and **never cover the dial**.
-- Keep the camera **focused on gameplay**: a big dial and a slim needle. The user asked for both.
-- Zones, needle and timer must stay readable from the queue. The check is to shrink a 1080p screenshot to 480 px wide.
+1. **Sample leaderboard** (`SEED_BOARD`) shows made-up names and scores until `Clear today's scores` is pressed before the booth opens (§9). After clearing once, empty `[]` stays empty across refreshes and rolls over cleanly each calendar day (`ticklock_lb_date`).
+2. **Booth playtesting** remains: run live visitors through levels 1–8+ at the booth and export `ticklock_history` CSV to validate target run durations (~30–60 s).
 
 ---
 
-## 10. NEXT TASK: port the real game rules (replace `demo.js`)
+## 14. The user
 
-Use `tick-lock-game-design.md` §2–7 as the source of truth. Create `src/game.js` with the **same state shape (§5.1) and the same events (§5.2)**, so `hud` and `fx` keep working. Then switch `main.js` from `createDemo` to it. The debug keys can stay behind a `?debug` flag.
-
-**Constants** (put them in one block at the top, as the design doc requires):
-```js
-const LEVELS = [ // [hits in level, speed rad/s, width degrees, zones, lifetime s (0 = no shrink), blue chance]
-  [4, 2.0, 30, 1, 0,   0.00],
-  [4, 2.2, 28, 2, 0,   0.00],
-  [5, 2.4, 26, 2, 0,   0.15],
-  [5, 2.6, 25, 3, 5.0, 0.15],
-  [6, 2.9, 24, 3, 4.2, 0.18],
-  [6, 3.2, 23, 4, 3.6, 0.20],
-  [8, 3.5, 22, 4, 3.2, 0.20],
-  [8, 3.8, 22, 5, 2.8, 0.22],
-];
-const START_TIME = 12, HIT_TIME = 0.3, BLUE_TIME = 2, LEVEL_TIME = 2, MISS_TIME = 1.5;
-const ENDLESS_SPEED = 0.1, MIN_WINDOW = 0.09;          // endless: +0.1 rad/s per level; widen zones so window ≥ 90 ms
-const BOOST_SPEED = 1.8, BOOST_SCORE = 2, PERFECT_CORE = 0.3, SPAWN_GAP = 0.7, BLINK = 0.8, BLUE_LIFE = 0.7;
-```
-
-**Rules to implement**
-- The clock drains 1 s per second; game over at 0.
-- A hit adds `HIT_TIME`, plus `BLUE_TIME` for a blue zone. A level up adds `LEVEL_TIME`. A miss costs `MISS_TIME`.
-- **At most one blue zone** on the ring at a time. Blue zones live 0.7× as long as gold.
-- Zones shrink from level 4. The outline shows the original size, they blink in their last 0.8 s, and an expired zone **costs nothing** and is replaced at once.
-- The zone count comes from the level. Spawn at least 0.7 rad from the needle, with no overlaps.
-- Score: `100 × (1 + 0.1·combo) × (perfect ? 2 : 1) × (boost ? 2 : 1)`. The combo grows by 1 per hit and resets on a miss.
-- Level up is based on hits in the level. Play doesn't pause, and the speed changes immediately.
-- After level 8, the game goes endless: level 8 settings, 8 hits per level, +0.1 rad/s per level, and the zone width grows if needed so that `width / speed ≥ 0.09 s`.
-- Best score is saved in `localStorage` (the key is `ticklock_best`, already used by the demo).
-- The game-over screen ignores input for 0.6 s (`retryReady`).
-
-**Also from the doc**
-- **Audio** (§9), using the WebAudio oscillators listed there:
-  - hit: 660 Hz square
-  - perfect: 880 Hz
-  - blue: 990 Hz triangle
-  - miss: 140 Hz sawtooth
-  - level up: 1320 Hz
-  - game over: a low falling buzz
-
-  Sound may only start after the first user input.
-- Booth notes (§11): clear localStorage each morning for the "high score of the day".
-
-**Verification after porting**
-- Play through levels 1→8→endless.
-- Check the time economy: an average run is about 30 s.
-- Confirm every event still triggers its visuals (screenshot each).
-- Check that there are no console errors and the frame rate is unchanged.
+- A university student building this for the CMM KMUTT Open House booth. They give feedback with screenshots, decide quickly and usually take the recommended option.
+- **Performance-sensitive:** they have reported lag and black flashes. Verify fps after visual changes and avoid heavy effects.
+- **Wants it sharp,** not blurry: do not lower the resolution to buy speed.
+- **Likes:** the gameplay-focused zoomed camera, a slim needle, a clean round bezel, the late-night mood, a polished, non-generic UI.
+- **Workflow they like:** discuss and plan first, then build, then verify with screenshots in a real browser. Ask before big or irreversible changes; commit only when asked.
 
 ---
 
-## 11. Performance notes and pitfalls (learned the hard way)
+## 15. Checklist for the next agent
 
-- **Dev machine:** Windows 11 laptop with an Intel UHD (0x9A60) integrated GPU, which Blender shares. Absolute fps there varies 3× with heat and power state. **Compare changes within the same run**, and use GPU timing:
-  ```js
-  // in page: force GPU finish per frame to get real cost
-  const gl = stage.renderer.getContext(), px = new Uint8Array(4);
-  const t0 = performance.now(); for (let i = 0; i < 30; i++) { stage.render(); gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,px); }
-  console.log((performance.now() - t0) / 30, 'ms/frame');
-  ```
-  `gl.finish()` does **not** block on ANGLE/D3D11, so use `readPixels`.
-- **Playwright's Chrome window throttles to 1 fps when it's covered or minimized** (frame gaps of exactly 1000 ms). The rAF-based fps numbers are meaningless then.
-- **Don't open a second WebGL page** for baseline tests while the game is running. It caused GPU context loss on this machine.
-- **Current cost:** about 11.8 ms per full frame and about 8.1 ms for the bare 3D scene, at a 1631×918 buffer.
-- **Things that were tried and are slow:** 4× MSAA on the composer target (much too heavy), multiple full-screen passes (OutputPass, grade and FXAA as separate passes doubled the frame), the bloom chain at half resolution, 2× canvas textures uploaded at 30 Hz, and GPU-backed 2D canvases.
-- **Keep:** one final combined pass, quarter-resolution bloom, CPU-backed canvases, redrawing the hub only when it changes, Lambert materials for the background, and one-way adaptive quality.
-- **Tone mapping:** ACES washed out the zone colors in the earlier bright scene. The colors are now tuned for ACES in a dark scene. If zones turn white again, lower the zone multipliers in `dial.js`, not the exposure.
-
----
-
-## 12. User preferences and decisions so far
-
-- The user is a university student building this for the CMM KMUTT Open House booth. They pick options quickly and often choose the recommended one, and they give visual feedback through screenshots.
-- **They are performance-sensitive.** They reported lag and black flashes. Always verify fps and avoid heavy effects.
-- **They want it sharp.** Avoid visibly blurry output; the render scale floor is 0.6, and normal play runs at 0.85 or more.
-- **They prefer a gameplay-focused, zoomed camera**, a **slim needle**, a **clean, perfectly round dial bezel** (the knurl is cut *into* the rim, not sticking out) and the **late-night moody look**.
-- **Decision history:**
-  1. Studio Lock theme, toy style.
-  2. Remodel detail pass.
-  3. Sharpness fixes.
-  4. Black flash and lag fixes.
-  5. Zoom and slim needle.
-  6. Round bezel.
-  7. Late-night mood (the reference-inspired look).
-  8. Optimization.
-- **Workflow they like:** plan first (they use plan mode), then implement, then verify with screenshots.
-- **Not a git repo yet.** Don't commit unless asked; suggest `git init` if version control becomes useful.
-
----
-
-## 13. Quick checklist for the next agent
-
-1. Run `npx serve .`, open the URL, press F, and play with keys 1–7 to see every visual.
-2. Read `tick-lock-game-design.md` (rules) and the visual spec §2.1, §5 and §7.
-3. Implement `src/game.js` from §10 above, keeping the state shape and events.
-4. Add audio (§10).
-5. Verify with screenshots, readability at 480 px, fps, and no console errors.
-6. Update `tick-lock-game-design.md` §12, the visual spec, and this file when done.
+1. `git status` and `git log`: see what is committed, and ask about the uncommitted edits (§4).
+2. Serve the project (§3), press F, play through the menu flow and a run, use debug keys 1 to 7 to see every effect.
+3. Read §13 and confirm next steps (booth playtest / balance / commit when requested).
+4. After any change: check in a real browser with screenshots, check fps on the dev laptop by comparing builds side by side (§11), and confirm the console is clean.
+5. Update this file when you finish.

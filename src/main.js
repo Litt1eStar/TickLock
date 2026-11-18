@@ -80,6 +80,8 @@ const perf = { frames: 0, acc: 0, avgMs: 0, pixelRatio: stage.renderer.getPixelR
 const LB_KEY = 'ticklock_leaderboard';
 const LOG_KEY = 'ticklock_history';
 const RUN_SEQ_KEY = 'ticklock_run_seq';
+const LB_DATE_KEY = 'ticklock_lb_date';
+const todayKey = () => new Date().toLocaleDateString('en-CA');
 const SEED_BOARD = [
   { name: 'LITT1ESTAR', score: 14800, level: 7, maxCombo: 18, perfects: 12, avatar: 'ace',      timeLabel: '10:15', runTime: 54.2 },
   { name: 'MUASOOM',    score: 9600,  level: 5, maxCombo: 12, perfects: 8,  avatar: 'vinyl',    timeLabel: '10:08', runTime: 41.8 },
@@ -89,6 +91,21 @@ const SEED_BOARD = [
   { name: 'NIGHT-OWL',  score: 2650,  level: 2, maxCombo: 4,  perfects: 2,  avatar: 'onair',    timeLabel: '09:18', runTime: 22.1 },
   { name: 'VISITOR',    score: 1400,  level: 2, maxCombo: 3,  perfects: 1,  avatar: 'padlock',  timeLabel: '09:05', runTime: 16.7 },
 ];
+const today = todayKey();
+let rolledOver = false;
+try {
+  const savedDate = localStorage.getItem(LB_DATE_KEY);
+  if (savedDate && savedDate !== today) {
+    rolledOver = true;
+    localStorage.setItem(LB_KEY, '[]');
+    localStorage.setItem(RUN_SEQ_KEY, '0');
+    localStorage.setItem('ticklock_best', '0');
+    localStorage.setItem(LB_DATE_KEY, today);
+    demo.state.best = 0;
+  } else if (!savedDate) {
+    localStorage.setItem(LB_DATE_KEY, today);
+  }
+} catch {}
 let selectedAvatar = AVATARS[0].id;
 let lastRun = null;
 let runSeq = Number(localStorage.getItem(RUN_SEQ_KEY) || 0);
@@ -110,11 +127,15 @@ avPicker.addEventListener('click', (e) => {
   avPicker.querySelectorAll('.av-opt').forEach((b) => b.classList.toggle('active', b === btn));
 });
 let board = [];
-try {
-  const raw = JSON.parse(localStorage.getItem(LB_KEY) || 'null');
-  board = Array.isArray(raw) && raw.length > 0 ? raw : [...SEED_BOARD];
-} catch {
-  board = [...SEED_BOARD];
+if (rolledOver) {
+  board = [];
+} else {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LB_KEY) || 'null');
+    board = Array.isArray(raw) ? raw : [...SEED_BOARD];
+  } catch {
+    board = [...SEED_BOARD];
+  }
 }
 
 const fmtScore = (n) => Math.round(n || 0).toLocaleString('en-US');
@@ -225,6 +246,7 @@ function commitRunScore(explicitName = '') {
     localStorage.setItem(LB_KEY, JSON.stringify(board));
     localStorage.setItem(LOG_KEY, JSON.stringify(runLog));
     localStorage.setItem(RUN_SEQ_KEY, String(runSeq));
+    localStorage.setItem(LB_DATE_KEY, todayKey());
   } catch {}
 }
 
@@ -435,6 +457,7 @@ $('lb-reset').addEventListener('click', () => {
     localStorage.setItem(LOG_KEY, '[]');
     localStorage.setItem(RUN_SEQ_KEY, '0');
     localStorage.setItem('ticklock_best', '0');
+    localStorage.setItem(LB_DATE_KEY, todayKey());
   } catch {}
   syncLeaderboardUI();
 });
@@ -596,6 +619,7 @@ window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyL') { openLeaderboard(); return; }
     if (e.code === 'KeyG') { $('btn-menu-settings').click(); return; }
     if (e.code === 'KeyF') { $('perf').hidden = !$('perf').hidden; return; }
+    if (/^[0-7]$/.test(e.key)) { phase = 'run'; demo.debugKey(e.key); }   // debug keys, as before the redesign
     return;
   }
   if (demo.state.mode === 'play' && demo.state.paused) {
@@ -673,7 +697,7 @@ function pollPad() {
 
 // ---------- loop
 // Adaptive quality: never reallocate render targets mid-game (which causes black-frame flashes).
-// If the GPU is consistently slow (> 28 ms for 2 s), only disable bloom once.
+// If the GPU is consistently slow (> 28 ms for 2 s), drop particles once.
 let slowSeconds = 0, drops = 0;
 const startedAt = performance.now();
 function adaptQuality(avgMs) {
@@ -681,7 +705,8 @@ function adaptQuality(avgMs) {
   if (performance.now() - startedAt < 3000) return;           // ignore loading hitches
   slowSeconds = avgMs > 28 ? slowSeconds + 1 : 0;
   if (slowSeconds >= 2) {
-    stage.bloom.enabled = false;
+    stage.visuals.particles = false;
+    syncSettingsUI();
     slowSeconds = 0; drops++;
     perf.tier = drops;
   }
@@ -707,12 +732,15 @@ function frame(now) {
   });
   hud.update(vdt, s);
   fx.update(vdt, s);
+  audio.update(vdt, s);
   pause3d.update(fx.updatePauseCam(dt, s));
   stage.render();
 
   // Contextual visibility for Title UI, Mode Attribute & Tutorial Banner
-  document.body.dataset.mode = s.mode;
-  document.body.dataset.paused = s.paused ? 'true' : 'false';
+  // write only on change: attribute writes invalidate style even when the value is the same
+  const ds = document.body.dataset, pausedStr = s.paused ? 'true' : 'false';
+  if (ds.mode !== s.mode) ds.mode = s.mode;
+  if (ds.paused !== pausedStr) ds.paused = pausedStr;
   const menuUp = booted && s.mode === 'title' && phase === 'menu';
   if ($('title-ui').hidden === menuUp) $('title-ui').hidden = !menuUp;
   const banner = $('tutorial-banner');

@@ -39,6 +39,7 @@ export function createApi() {
     mode: 'openhouse',
     adminProtected: false,
     scope: 'today',
+    difficulty: 'normal',
     apiBase: savedApi || normalizeBase(DEFAULT_API_URL),
     pendingCount: Array.isArray(initialOutbox) ? initialOutbox.length : 0,
     stats: {
@@ -118,14 +119,15 @@ export function createApi() {
     return { status: res.status, ok: res.ok, data };
   }
 
-  async function fetchState(scope = state.scope) {
+  async function fetchState(scope = state.scope, difficulty = state.difficulty) {
     try {
-      const { ok, data } = await req(`/api/state?scope=${encodeURIComponent(scope)}`);
+      const { ok, data } = await req(`/api/state?scope=${encodeURIComponent(scope)}&difficulty=${encodeURIComponent(difficulty)}`);
       if (!ok || !data?.ok) return null;
       state.online = true;
       state.mode = data.mode || state.mode;
       state.adminProtected = Boolean(data.adminProtected);
       state.scope = data.scope || scope;
+      state.difficulty = data.difficulty || difficulty;
       state.stats = data.stats || state.stats;
       if (data.user) persistAuth(state.token, data.user);
       else if (state.token && data.user === null) persistAuth('', null);
@@ -136,13 +138,13 @@ export function createApi() {
     }
   }
 
-  async function flushOutbox(scope = state.scope) {
+  async function flushOutbox(scope = state.scope, difficulty = state.difficulty) {
     const pending = getOutbox();
     if (!pending.length) return true;
     try {
-      const { ok, data } = await req(`/api/runs?scope=${encodeURIComponent(scope)}`, {
+      const { ok, data } = await req(`/api/runs?scope=${encodeURIComponent(scope)}&difficulty=${encodeURIComponent(difficulty)}`, {
         method: 'POST',
-        body: JSON.stringify({ scope, runs: pending }),
+        body: JSON.stringify({ scope, difficulty, runs: pending }),
       });
       if (!ok || !data?.ok) return false;
       setOutbox([]);
@@ -156,8 +158,8 @@ export function createApi() {
   }
 
   async function init() {
-    await flushOutbox('today');
-    return fetchState('today');
+    await flushOutbox('today', state.difficulty);
+    return fetchState('today', state.difficulty);
   }
 
   async function notifyPlayStart() {
@@ -177,14 +179,14 @@ export function createApi() {
     return false;
   }
 
-  async function submitRun(run, scope = state.scope) {
+  async function submitRun(run, scope = state.scope, difficulty = state.difficulty) {
     const payload = { ...run, eventTag: state.mode };
     enqueueRun(payload);
     try {
       const pending = getOutbox();
-      const { ok, data } = await req(`/api/runs?scope=${encodeURIComponent(scope)}`, {
+      const { ok, data } = await req(`/api/runs?scope=${encodeURIComponent(scope)}&difficulty=${encodeURIComponent(difficulty)}`, {
         method: 'POST',
-        body: JSON.stringify({ scope, runs: pending }),
+        body: JSON.stringify({ scope, difficulty, runs: pending }),
       });
       if (!ok || !data?.ok) return null;
       setOutbox([]);

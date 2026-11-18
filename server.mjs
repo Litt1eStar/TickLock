@@ -92,6 +92,7 @@ db.exec(`
     hits INTEGER NOT NULL DEFAULT 0,
     run_time REAL NOT NULL DEFAULT 0,
     fatal_text TEXT NOT NULL DEFAULT '',
+    difficulty TEXT NOT NULL DEFAULT 'normal',
     event_tag TEXT NOT NULL DEFAULT 'openhouse',
     day_key TEXT NOT NULL,
     time_label TEXT NOT NULL,
@@ -103,6 +104,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_runs_event ON runs(event_tag, score DESC);
   CREATE INDEX IF NOT EXISTS idx_runs_all ON runs(score DESC);
 `);
+try { db.exec("ALTER TABLE runs ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'normal'"); } catch {}
+db.exec('CREATE INDEX IF NOT EXISTS idx_runs_diff ON runs(difficulty, score DESC)');
 db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(new Date().toISOString());
 
 const stmts = {
@@ -117,26 +120,26 @@ const stmts = {
   countToday: db.prepare('SELECT COUNT(*) AS n FROM runs WHERE day_key = ? AND cleared_today = 0'),
   countUnique: db.prepare('SELECT COUNT(DISTINCT name) AS n FROM runs WHERE score > 0'),
   boardToday: db.prepare(`
-    SELECT id, name, score, level, max_combo, perfects, hits, run_time, avatar, time_label, day_key, event_tag, is_guest
-    FROM runs WHERE day_key = ? AND cleared_today = 0 AND score > 0
+    SELECT id, name, score, level, max_combo, perfects, hits, run_time, avatar, time_label, day_key, event_tag, difficulty, is_guest
+    FROM runs WHERE day_key = ? AND cleared_today = 0 AND score > 0 AND (? = 'all' OR difficulty = ?)
     ORDER BY score DESC, id ASC LIMIT 10
   `),
   boardOpenhouse: db.prepare(`
-    SELECT id, name, score, level, max_combo, perfects, hits, run_time, avatar, time_label, day_key, event_tag, is_guest
-    FROM runs WHERE event_tag = 'openhouse' AND score > 0
+    SELECT id, name, score, level, max_combo, perfects, hits, run_time, avatar, time_label, day_key, event_tag, difficulty, is_guest
+    FROM runs WHERE event_tag = 'openhouse' AND score > 0 AND (? = 'all' OR difficulty = ?)
     ORDER BY score DESC, id ASC LIMIT 10
   `),
   boardAll: db.prepare(`
-    SELECT id, name, score, level, max_combo, perfects, hits, run_time, avatar, time_label, day_key, event_tag, is_guest
-    FROM runs WHERE score > 0
+    SELECT id, name, score, level, max_combo, perfects, hits, run_time, avatar, time_label, day_key, event_tag, difficulty, is_guest
+    FROM runs WHERE score > 0 AND (? = 'all' OR difficulty = ?)
     ORDER BY score DESC, id ASC LIMIT 10
   `),
   findRunByClientId: db.prepare('SELECT id, user_id FROM runs WHERE client_run_id = ?'),
   insertRun: db.prepare(`
     INSERT INTO runs (
       client_run_id, user_id, is_guest, name, avatar, score, level, max_combo,
-      perfects, hits, run_time, fatal_text, event_tag, day_key, time_label, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      perfects, hits, run_time, fatal_text, difficulty, event_tag, day_key, time_label, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `),
   updateRunMeta: db.prepare('UPDATE runs SET name = ?, avatar = ?, user_id = ?, is_guest = ? WHERE id = ?'),
   bumpUserStats: db.prepare('UPDATE users SET best_score = MAX(best_score, ?), total_runs = total_runs + 1, avatar = ? WHERE id = ?'),
@@ -159,6 +162,7 @@ const stmts = {
 
 const todayKey = () => new Date().toLocaleDateString('en-CA', { timeZone: process.env.TZ || 'Asia/Bangkok' });
 const validScope = (s) => (s === 'openhouse' || s === 'all' ? s : 'today');
+const validDiff = (d) => (d === 'easy' || d === 'normal' || d === 'hard' || d === 'muasoom' || d === 'all' ? d : 'normal');
 const clampInt = (v, min, max, fallback = min) => {
   const n = Math.round(Number(v));
   return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback;
@@ -251,17 +255,19 @@ function mapBoardRow(r) {
     timeLabel: r.time_label,
     dayKey: r.day_key,
     eventTag: r.event_tag,
+    difficulty: r.difficulty || 'normal',
     isGuest: Boolean(r.is_guest),
   };
 }
 
-function getBoard(scope = 'today') {
+function getBoard(scope = 'today', difficulty = 'all') {
   const s = validScope(scope);
+  const d = validDiff(difficulty);
   const rows = s === 'openhouse'
-    ? stmts.boardOpenhouse.all()
+    ? stmts.boardOpenhouse.all(d, d)
     : s === 'all'
-      ? stmts.boardAll.all()
-      : stmts.boardToday.all(todayKey());
+      ? stmts.boardAll.all(d, d)
+      : stmts.boardToday.all(todayKey(), d, d);
   return rows.map(mapBoardRow);
 }
 
@@ -435,12 +441,14 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === '/api/state' && req.method === 'GET') {
       const scope = validScope(url.searchParams.get('scope'));
-      const board = getBoard(scope);
+      const difficulty = validDiff(url.searchParams.get('difficulty') || 'all');
+      const board = getBoard(scope, difficulty);
       return sendJson(req, res, 200, {
         ok: true,
         mode: MODE,
         adminProtected: Boolean(ADMIN_KEY || MODE === 'public'),
         scope,
+        difficulty,
         stats: getStats(),
         board,
         bestScore: board[0]?.score || 0,
@@ -450,10 +458,10 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === '/api/runs/export.csv' && req.method === 'GET') {
       const rows = stmts.exportCsvRuns.all();
-      const header = 'ID,Timestamp,Day,Time,EventTag,AccountType,Callsign,Score,SurvivalTime_s,Level,MaxCombo,Perfects,Hits,FatalReason,Avatar';
+      const header = 'ID,Timestamp,Day,Time,EventTag,Difficulty,AccountType,Callsign,Score,SurvivalTime_s,Level,MaxCombo,Perfects,Hits,FatalReason,Avatar';
       const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
       const lines = rows.map((r) => [
-        r.id, r.created_at, r.day_key, r.time_label, r.event_tag,
+        r.id, r.created_at, r.day_key, r.time_label, r.event_tag, r.difficulty || 'normal',
         r.is_guest ? 'guest' : 'account', esc(r.name), r.score, r.run_time,
         r.level, r.max_combo, r.perfects, r.hits, esc(r.fatal_text), r.avatar,
       ].join(','));
@@ -485,6 +493,7 @@ const server = http.createServer(async (req, res) => {
         }
         const caller = authUser(req);
         const scope = validScope(body?.scope || url.searchParams.get('scope'));
+        const reqDiff = validDiff(body?.difficulty || url.searchParams.get('difficulty') || 'all');
         const normalizedRuns = [];
 
         db.exec('BEGIN');
@@ -507,6 +516,8 @@ const server = http.createServer(async (req, res) => {
             const timeLabel = /^\d{2}:\d{2}$/.test(String(raw.timeLabel || '')) ? raw.timeLabel : new Date().toTimeString().slice(0, 5);
             const createdAt = raw.at && !Number.isNaN(Date.parse(raw.at)) ? new Date(raw.at).toISOString() : new Date().toISOString();
             const fatalText = String(raw.fatalText || '').slice(0, 80);
+            const difficulty = validDiff(raw.difficulty);
+            const safeDiff = difficulty === 'all' ? 'normal' : difficulty;
 
             normalizedRuns.push({
               clientRunId,
@@ -520,6 +531,7 @@ const server = http.createServer(async (req, res) => {
               hits,
               runTime,
               fatalText,
+              difficulty: safeDiff,
               eventTag,
               dayKey,
               timeLabel,
@@ -532,7 +544,7 @@ const server = http.createServer(async (req, res) => {
             } else {
               stmts.insertRun.run(
                 clientRunId, userId, isGuest, name, avatar, score, level, maxCombo,
-                perfects, hits, runTime, fatalText, eventTag, dayKey, timeLabel, createdAt,
+                perfects, hits, runTime, fatalText, safeDiff, eventTag, dayKey, timeLabel, createdAt,
               );
               if (!raw.countedStart) stmts.incPlays.run();
               if (userId) stmts.bumpUserStats.run(score, avatar, userId);
@@ -548,7 +560,7 @@ const server = http.createServer(async (req, res) => {
           mirrorToUpstream('/api/runs', { scope, runs: normalizedRuns }, req.headers.authorization || '');
         }
 
-        const board = getBoard(scope);
+        const board = getBoard(scope, reqDiff);
         return sendJson(req, res, 200, {
           ok: true,
           stats: getStats(),

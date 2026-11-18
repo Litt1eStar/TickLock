@@ -125,6 +125,65 @@
     </div>
   </div>
 
+  <!-- Difficulty Selection Modal: a stepped list; each arc is the level-1 target at its true width -->
+  <div id="difficulty-modal" class="modal-backdrop" hidden>
+    <div class="modal-card diff-card-modal" role="dialog" aria-modal="true" aria-labelledby="diff-title">
+      <div class="modal-head">
+        <h2 id="diff-title">Select difficulty</h2>
+        <button id="btn-close-difficulty" class="modal-close" type="button" aria-label="Close"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+      </div>
+      <div class="diff-grid" role="radiogroup" aria-labelledby="diff-title">
+        <button class="diff-opt" data-difficulty="easy" type="button" role="radio" aria-checked="false" tabindex="-1">
+          <svg class="diff-arc" viewBox="0 0 40 40" width="60" height="60" aria-hidden="true"><circle class="diff-arc-ring" cx="20" cy="20" r="16"/><circle class="diff-arc-target" cx="20" cy="20" r="16" pathLength="360" stroke-dasharray="38 322" transform="rotate(-109 20 20)"/><circle class="diff-arc-hub" cx="20" cy="20" r="2"/><line class="diff-arc-needle" x1="20" y1="20" x2="20" y2="10"/></svg>
+          <span class="diff-body">
+            <span class="diff-name">Easy</span>
+            <span class="diff-desc">Forgiving needle speed, wider targets, and slower shrink.</span>
+          </span>
+          <span class="diff-facts">
+            <span class="diff-mult">×0.85 score</span>
+            <span class="diff-clock">35 s clock</span>
+          </span>
+        </button>
+        <button class="diff-opt active" data-difficulty="normal" type="button" role="radio" aria-checked="true" tabindex="0">
+          <svg class="diff-arc" viewBox="0 0 40 40" width="60" height="60" aria-hidden="true"><circle class="diff-arc-ring" cx="20" cy="20" r="16"/><circle class="diff-arc-target" cx="20" cy="20" r="16" pathLength="360" stroke-dasharray="30 330" transform="rotate(-105 20 20)"/><circle class="diff-arc-hub" cx="20" cy="20" r="2"/><line class="diff-arc-needle" x1="20" y1="20" x2="20" y2="10"/></svg>
+          <span class="diff-body">
+            <span class="diff-name">Normal</span>
+            <span class="diff-desc">Balanced tempo with spaced targets and steady pressure.</span>
+          </span>
+          <span class="diff-facts">
+            <span class="diff-mult">×1.0 score</span>
+            <span class="diff-clock">30 s clock</span>
+          </span>
+        </button>
+        <button class="diff-opt" data-difficulty="hard" type="button" role="radio" aria-checked="false" tabindex="-1">
+          <svg class="diff-arc" viewBox="0 0 40 40" width="60" height="60" aria-hidden="true"><circle class="diff-arc-ring" cx="20" cy="20" r="16"/><circle class="diff-arc-target" cx="20" cy="20" r="16" pathLength="360" stroke-dasharray="25 335" transform="rotate(-102.5 20 20)"/><circle class="diff-arc-hub" cx="20" cy="20" r="2"/><line class="diff-arc-needle" x1="20" y1="20" x2="20" y2="10"/></svg>
+          <span class="diff-body">
+            <span class="diff-name">Hard</span>
+            <span class="diff-desc">Fast needle, narrower targets, early drift, and tight clock.</span>
+          </span>
+          <span class="diff-facts">
+            <span class="diff-mult">×1.35 score</span>
+            <span class="diff-clock">26 s clock</span>
+          </span>
+        </button>
+        <button class="diff-opt diff-opt-muasoom" data-difficulty="muasoom" type="button" role="radio" aria-checked="false" tabindex="-1">
+          <svg class="diff-arc" viewBox="0 0 40 40" width="60" height="60" aria-hidden="true"><circle class="diff-arc-ring" cx="20" cy="20" r="16"/><circle class="diff-arc-target" cx="20" cy="20" r="16" pathLength="360" stroke-dasharray="19 341" transform="rotate(-99.5 20 20)"/><circle class="diff-arc-hub" cx="20" cy="20" r="2"/><line class="diff-arc-needle" x1="20" y1="20" x2="20" y2="10"/></svg>
+          <span class="diff-body">
+            <span class="diff-name">Muasoom</span>
+            <span class="diff-desc">Extreme speed, razor-thin targets, rapid shrink, zero mercy.</span>
+          </span>
+          <span class="diff-facts">
+            <span class="diff-mult">×1.85 score</span>
+            <span class="diff-clock">22 s clock</span>
+          </span>
+        </button>
+      </div>
+      <div class="modal-foot">
+        <button id="btn-diff-continue" class="btn-primary primary" type="button">Continue <kbd>Enter</kbd></button>
+      </div>
+    </div>
+  </div>
+
   <!-- Arcade Leaderboard Modal -->
   <div id="leaderboard-modal" class="modal-backdrop" hidden>
     <div class="modal-card lb-card" role="dialog" aria-modal="true" aria-labelledby="lb-title">
@@ -140,6 +199,15 @@
           <button class="lb-tab" data-scope="all" role="tab" aria-selected="false" type="button">All time</button>
         </div>
         <p id="lb-stats" class="lb-stats">0 plays / 0 players</p>
+      </div>
+      <div class="lb-filter">
+        <span id="lb-diff-label" class="lb-filter-label">Difficulty</span>
+        <div class="lb-diff-tabs" role="tablist" aria-labelledby="lb-diff-label">
+          <button class="lb-diff-tab" data-difficulty="easy" role="tab" aria-selected="false" type="button">Easy</button>
+          <button class="lb-diff-tab active" data-difficulty="normal" role="tab" aria-selected="true" type="button">Normal</button>
+          <button class="lb-diff-tab" data-difficulty="hard" role="tab" aria-selected="false" type="button">Hard</button>
+          <button class="lb-diff-tab lb-diff-muasoom" data-difficulty="muasoom" role="tab" aria-selected="false" type="button">Muasoom</button>
+        </div>
       </div>
 
       <div id="lb-podium" class="lb-podium"></div>

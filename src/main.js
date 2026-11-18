@@ -141,6 +141,10 @@ if (rolledOver) {
 
 const api = createApi();
 let lbScope = 'today';
+let selectedDifficulty = localStorage.getItem('ticklock_difficulty') || 'normal';
+selectedDifficulty = demo.setDifficulty(selectedDifficulty);
+let lbDifficulty = selectedDifficulty;   // the board opens on the difficulty you play
+api.state.difficulty = selectedDifficulty;
 let todayBoard = [...board];
 let currentRunId = '';
 let currentRunCountedStart = false;
@@ -157,7 +161,8 @@ function applyServerState(res) {
   if (!res?.ok) return;
   if (Array.isArray(res.board)) {
     board = res.board;
-    if ((res.scope || lbScope) === 'today') {
+    // the menu monitor shows today's board for the difficulty you play, never a filter you browsed
+    if ((res.scope || lbScope) === 'today' && (res.difficulty || lbDifficulty) === selectedDifficulty) {
       todayBoard = res.board;
       try { localStorage.setItem(LB_KEY, JSON.stringify(todayBoard)); } catch { }
     }
@@ -169,7 +174,7 @@ function applyServerState(res) {
 function syncLeaderboardUI() {
   board.sort((a, b) => b.score - a.score);
   board = board.slice(0, 10);
-  if (lbScope === 'today') todayBoard = [...board];
+  if (lbScope === 'today' && lbDifficulty === selectedDifficulty) todayBoard = [...board];
   const topScore = todayBoard[0]?.score || 0;
   if (topScore > demo.state.best) {
     demo.state.best = topScore;
@@ -246,6 +251,7 @@ function commitRunScore(explicitName = '') {
   const name = (typed || `PLAYER #${runSeq}`).slice(0, 14).toUpperCase();
   const entry = {
     ...pendingRun,
+    difficulty: pendingRun.difficulty || demo.state.difficulty || selectedDifficulty,
     name,
     avatar: selectedAvatar,
     at: pendingRun.at || new Date().toISOString(),
@@ -267,7 +273,7 @@ function commitRunScore(explicitName = '') {
     localStorage.setItem(RUN_SEQ_KEY, String(runSeq));
     localStorage.setItem(LB_DATE_KEY, todayKey());
   } catch { }
-  api.submitRun(entry, lbScope).then(applyServerState);
+  api.submitRun(entry, lbScope, lbDifficulty).then(applyServerState);
 }
 
 function onGameEvent(evt, d = {}) {
@@ -344,7 +350,7 @@ function onGameEvent(evt, d = {}) {
     };
 
     const provisionalName = api.state.user?.displayName || (sc > 0 ? `PLAYER #${runSeq + 1}` : 'ANON');
-    api.submitRun({ ...runPayload, name: provisionalName, avatar: selectedAvatar }, lbScope).then(applyServerState);
+    api.submitRun({ ...runPayload, difficulty: demo.state.difficulty || selectedDifficulty, name: provisionalName, avatar: selectedAvatar }, lbScope, lbDifficulty).then(applyServerState);
 
     const canSave = sc > 0;
     pendingRun = canSave ? runPayload : null;
@@ -462,9 +468,10 @@ function toMenu() {
 }
 
 function openLeaderboard() {
+  syncLbDiffTabs();
   openModal('leaderboard-modal', true);
   $('lb-close-btn').focus();
-  api.fetchState(lbScope).then(applyServerState);
+  api.fetchState(lbScope, lbDifficulty).then(applyServerState);
 }
 function closeLeaderboard() {
   openModal('leaderboard-modal', false);
@@ -476,6 +483,18 @@ const SCOPE_TITLES = {
   openhouse: 'Open House 2026 top 10',
   all: 'All-time top 10',
 };
+const DIFF_LABELS = { easy: 'Easy', normal: 'Normal', hard: 'Hard', muasoom: 'Muasoom' };
+function syncLbTitle() {
+  $('lb-title').textContent = `${SCOPE_TITLES[lbScope] || SCOPE_TITLES.today} on ${DIFF_LABELS[lbDifficulty] || DIFF_LABELS.normal}`;
+}
+function syncLbDiffTabs() {
+  document.querySelectorAll('#leaderboard-modal .lb-diff-tab[data-difficulty]').forEach((t) => {
+    const on = t.dataset.difficulty === lbDifficulty;
+    t.classList.toggle('active', on);
+    t.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  syncLbTitle();
+}
 document.querySelectorAll('#leaderboard-modal .lb-tab[data-scope]').forEach((tab) => {
   tab.addEventListener('click', () => {
     const next = tab.dataset.scope || 'today';
@@ -485,12 +504,22 @@ document.querySelectorAll('#leaderboard-modal .lb-tab[data-scope]').forEach((tab
       t.classList.toggle('active', on);
       t.setAttribute('aria-selected', on ? 'true' : 'false');
     });
-    $('lb-title').textContent = SCOPE_TITLES[next] || SCOPE_TITLES.today;
+    syncLbTitle();
     if (api.state.online) {
-      api.fetchState(lbScope).then(applyServerState);
+      api.fetchState(lbScope, lbDifficulty).then(applyServerState);
     } else {
       board = next === 'today' ? [...todayBoard] : [...todayBoard];
       syncLeaderboardUI();
+    }
+  });
+});
+
+document.querySelectorAll('#leaderboard-modal .lb-diff-tab[data-difficulty]').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    lbDifficulty = tab.dataset.difficulty || 'normal';
+    syncLbDiffTabs();
+    if (api.state.online) {
+      api.fetchState(lbScope, lbDifficulty).then(applyServerState);
     }
   });
 });
@@ -695,7 +724,53 @@ $('lb-export').addEventListener('click', () => {
 
 api.init().then(applyServerState);
 
-$('btn-start-main').addEventListener('click', () => { audio.unlock(); beginBrief(); });
+function syncDifficultyCards() {
+  document.querySelectorAll('#difficulty-modal .diff-opt[data-difficulty]').forEach((card) => {
+    const on = card.dataset.difficulty === selectedDifficulty;
+    card.classList.toggle('active', on);
+    card.setAttribute('aria-checked', on ? 'true' : 'false');
+    card.tabIndex = on ? 0 : -1;
+  });
+}
+const DIFF_ORDER = ['easy', 'normal', 'hard', 'muasoom'];
+function chooseDifficulty(id) {
+  selectedDifficulty = demo.setDifficulty(id || 'normal');
+  try { localStorage.setItem('ticklock_difficulty', selectedDifficulty); } catch { }
+  syncDifficultyCards();
+}
+function stepDifficulty(dir) {
+  const i = Math.max(0, DIFF_ORDER.indexOf(selectedDifficulty));
+  chooseDifficulty(DIFF_ORDER[Math.min(DIFF_ORDER.length - 1, Math.max(0, i + dir))]);
+  document.querySelector(`#difficulty-modal .diff-opt[data-difficulty="${selectedDifficulty}"]`)?.focus();
+}
+function closeDifficultyModal() {
+  openModal('difficulty-modal', false);
+  setRailFocus(railIndex);
+}
+function confirmDifficulty() {
+  openModal('difficulty-modal', false);
+  lbDifficulty = selectedDifficulty;   // after a run, the board shows the difficulty just played
+  syncLbDiffTabs();
+  if (api.state.online) api.fetchState(lbScope, lbDifficulty).then(applyServerState);
+  beginBrief();
+}
+syncDifficultyCards();
+
+function openDifficultyModal() {
+  syncDifficultyCards();
+  openModal('difficulty-modal', true);
+  document.querySelector('#difficulty-modal .diff-opt.active')?.focus();
+}
+
+document.querySelectorAll('#difficulty-modal .diff-opt[data-difficulty]').forEach((card) => {
+  card.addEventListener('click', () => chooseDifficulty(card.dataset.difficulty));
+  card.addEventListener('dblclick', confirmDifficulty);
+});
+$('btn-close-difficulty').addEventListener('click', closeDifficultyModal);
+$('btn-diff-continue').addEventListener('click', confirmDifficulty);
+syncLbDiffTabs();
+
+$('btn-start-main').addEventListener('click', () => { audio.unlock(); openDifficultyModal(); });
 $('btn-menu-settings').addEventListener('click', () => { toggleSettings(); if (!$('settings-panel').hidden) $('sp-preset').focus(); });
 $('btn-retry').addEventListener('click', () => { audio.unlock(); demo.start(); });
 $('btn-go-title').addEventListener('click', () => { audio.unlock(); toMenu(); });
@@ -798,8 +873,10 @@ window.addEventListener('keydown', (e) => {
   const tut = $('tutorial-modal');
   const lb = $('leaderboard-modal');
   const acct = $('account-modal');
+  const diff = $('difficulty-modal');
   if (e.code === 'Escape') {
     if (!settings.hidden) { toggleSettings(); return; }
+    if (!diff.hidden) { closeDifficultyModal(); return; }
     if (!tut.hidden) { closeTutorial(); return; }
     if (!lb.hidden) { closeLeaderboard(); return; }
     if (!acct.hidden) { closeAccount(); return; }
@@ -811,6 +888,14 @@ window.addEventListener('keydown', (e) => {
   if (!acct.hidden) return;
   // Settings controls keep their native keys (arrows move sliders, Space toggles the checkbox)
   if (!settings.hidden && settings.contains(document.activeElement)) return;
+  // Difficulty select owns the keys while open: arrows step, Enter or Space continues
+  if (!diff.hidden) {
+    if (e.code === 'ArrowDown' || e.code === 'ArrowRight' || e.code === 'KeyS') { e.preventDefault(); stepDifficulty(1); }
+    else if (e.code === 'ArrowUp' || e.code === 'ArrowLeft' || e.code === 'KeyW') { e.preventDefault(); stepDifficulty(-1); }
+    else if (/^[1-4]$/.test(e.key)) { e.preventDefault(); chooseDifficulty(DIFF_ORDER[Number(e.key) - 1]); }
+    else if (isGo(e) && document.activeElement !== $('btn-close-difficulty')) { e.preventDefault(); confirmDifficulty(); }
+    return;
+  }
   if (!tut.hidden) {
     if (isGo(e)) {
       e.preventDefault();

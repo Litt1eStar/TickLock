@@ -157,7 +157,7 @@ const stmts = {
   exportCsvRuns: db.prepare('SELECT * FROM runs ORDER BY id DESC'),
 };
 
-const todayKey = () => new Date().toLocaleDateString('en-CA');
+const todayKey = () => new Date().toLocaleDateString('en-CA', { timeZone: process.env.TZ || 'Asia/Bangkok' });
 const validScope = (s) => (s === 'openhouse' || s === 'all' ? s : 'today');
 const clampInt = (v, min, max, fallback = min) => {
   const n = Math.round(Number(v));

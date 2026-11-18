@@ -8,6 +8,7 @@ services:
     environment:
       PORT: "8642"
       HOST: "0.0.0.0"
+      TZ: "Asia/Bangkok"
       DB_PATH: "/app/data/ticklock.sqlite"
       TICKLOCK_MODE: "${TICKLOCK_MODE:-public}"
       ADMIN_KEY: "${ADMIN_KEY:-}"

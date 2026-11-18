@@ -282,13 +282,19 @@ export function createHud(parts, maxAniso = 8) {
 
   // ---------- monitor on the menu: today's top five, the reason to stay and play
   let board = [];
+  let boardStats = null;
   let boardVer = 0;
-  function setBoard(rows) { board = rows.slice(0, 5); boardVer++; }
+  function setBoard(rows, stats = null) { board = rows.slice(0, 5); boardStats = stats; boardVer++; }
   function drawBoard(ctx, W) {
     const L = 84, Rx = W - 84;
     ctx.textAlign = 'left';
     ctx.fillStyle = C.cream; ctx.font = `600 52px ${FONT}`;
     ctx.fillText('Today’s top five', L, 92);
+    if (boardStats && typeof boardStats.totalPlays === 'number') {
+      ctx.textAlign = 'right';
+      ctx.fillStyle = C.dim; ctx.font = `600 30px ${FONT}`;
+      ctx.fillText(`${boardStats.totalPlays} plays`, Rx, 94);
+    }
     ctx.fillStyle = 'rgba(212,162,89,0.45)';
     ctx.fillRect(L, 134, Rx - L, 2);
     if (!board.length) {

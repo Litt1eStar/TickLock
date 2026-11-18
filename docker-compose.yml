@@ -1,0 +1,15 @@
+services:
+  ticklock:
+    build: .
+    container_name: ticklock
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8642}:8642"
+    environment:
+      PORT: "8642"
+      HOST: "0.0.0.0"
+      DB_PATH: "/app/data/ticklock.sqlite"
+      TICKLOCK_MODE: "${TICKLOCK_MODE:-public}"
+      ADMIN_KEY: "${ADMIN_KEY:-}"
+    volumes:
+      - ./data:/app/data

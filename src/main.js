@@ -7,6 +7,7 @@ import { createGame } from './game.js';
 import { createAudio } from './audio.js';
 import { createPauseMenu } from './pause3d.js';
 import { AVATARS, getAvatar } from './avatars.js';
+import { createApi } from './api.js';
 
 const $ = (id) => document.getElementById(id);
 const dom = { floats: $('floats'), flash: $('flash') };
@@ -138,20 +139,50 @@ if (rolledOver) {
   }
 }
 
+const api = createApi();
+let lbScope = 'today';
+let todayBoard = [...board];
+let currentRunId = '';
+let currentRunCountedStart = false;
+
 const fmtScore = (n) => Math.round(n || 0).toLocaleString('en-US');
 const escHtml = (str) => String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function syncAvatarPicker(id) {
+  selectedAvatar = id || AVATARS[0].id;
+  avPicker.querySelectorAll('.av-opt').forEach((b) => b.classList.toggle('active', b.dataset.av === selectedAvatar));
+}
+
+function applyServerState(res) {
+  if (!res?.ok) return;
+  if (Array.isArray(res.board)) {
+    board = res.board;
+    if ((res.scope || lbScope) === 'today') {
+      todayBoard = res.board;
+      try { localStorage.setItem(LB_KEY, JSON.stringify(todayBoard)); } catch {}
+    }
+  }
+  syncLeaderboardUI();
+  syncAccountUI();
+}
 
 function syncLeaderboardUI() {
   board.sort((a, b) => b.score - a.score);
   board = board.slice(0, 10);
-  const topScore = board[0]?.score || 0;
+  if (lbScope === 'today') todayBoard = [...board];
+  const topScore = todayBoard[0]?.score || 0;
   if (topScore > demo.state.best) {
     demo.state.best = topScore;
     try { localStorage.setItem('ticklock_best', String(topScore)); } catch {}
   }
 
-  // The studio monitor shows today's top five on the menu
-  hud.setBoard(board);
+  const st = api.state.stats;
+  const playsCount = api.state.online ? st.totalPlays : Math.max(st.totalPlays, runLog.length);
+  const playersCount = api.state.online ? st.uniquePlayers : new Set([...todayBoard, ...runLog].filter((b) => b.score > 0).map((b) => b.name)).size;
+  $('lb-stats').textContent = `${fmtScore(playsCount)} plays / ${fmtScore(playersCount)} players`;
+
+  // The studio monitor always shows today's top five + live play counter on the menu
+  hud.setBoard(todayBoard, { totalPlays: playsCount, uniquePlayers: playersCount });
 
   // Studio Ranking: Olympic Hanging Podium (#2 Left, #1 Center, #3 Right) + Ranked List + Pinned Current Player
   const podium = $('lb-podium');
@@ -159,7 +190,7 @@ function syncLeaderboardUI() {
   const selfBar = $('lb-self');
   if (board.length === 0) {
     podium.innerHTML = '';
-    tracks.innerHTML = '<li class="lb-empty">No scores yet today. Set the first one.</li>';
+    tracks.innerHTML = '<li class="lb-empty">No scores yet for this view. Set the first one.</li>';
     selfBar.hidden = true;
   } else {
     const order = [1, 0, 2]; // #2 Left, #1 Center, #3 Right
@@ -222,45 +253,68 @@ function formatClockTime(d = new Date()) {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+function upsertLocalEntry(list, entry) {
+  const idx = entry.clientRunId ? list.findIndex((r) => r.clientRunId === entry.clientRunId) : -1;
+  if (idx >= 0) list[idx] = entry;
+  else list.push(entry);
+}
+
 function commitRunScore(explicitName = '') {
   if (scoreSavedThisRun || !pendingRun || pendingRun.score <= 0) return;
   runSeq += 1;
-  const typed = (explicitName || $('player-name').value || '').trim();
+  const typed = (explicitName || $('player-name').value || api.state.user?.displayName || '').trim();
   const name = (typed || `PLAYER #${runSeq}`).slice(0, 14).toUpperCase();
   const entry = {
     ...pendingRun,
     name,
     avatar: selectedAvatar,
-    at: new Date().toISOString(),
-    timeLabel: formatClockTime(),
+    at: pendingRun.at || new Date().toISOString(),
+    timeLabel: pendingRun.timeLabel || formatClockTime(),
+    dayKey: pendingRun.dayKey || todayKey(),
   };
-  board.push(entry);
-  runLog.push(entry);
+  upsertLocalEntry(todayBoard, entry);
+  if (lbScope === 'today') upsertLocalEntry(board, entry);
+  upsertLocalEntry(runLog, entry);
   scoreSavedThisRun = true;
   pendingRun = null;
 
-  const rank = board.filter((b) => b.score > entry.score).length + 1;
+  const rank = todayBoard.filter((b) => b.score > entry.score).length + 1;
   lastRun = { ...entry, rank };
   syncLeaderboardUI();
   try {
-    localStorage.setItem(LB_KEY, JSON.stringify(board));
+    localStorage.setItem(LB_KEY, JSON.stringify(todayBoard.slice(0, 10)));
     localStorage.setItem(LOG_KEY, JSON.stringify(runLog));
     localStorage.setItem(RUN_SEQ_KEY, String(runSeq));
     localStorage.setItem(LB_DATE_KEY, todayKey());
   } catch {}
+  api.submitRun(entry, lbScope).then(applyServerState);
 }
 
 function onGameEvent(evt, d = {}) {
-  if (evt === 'start') phase = 'run';
-  if (evt === 'title') { phase = 'menu'; setRailFocus(0); }
-  if (evt === 'start' || evt === 'title') {
-    // Auto-record previous run if visitor hit Retry / Main Menu without clicking Save
+  if (evt === 'start') {
+    phase = 'run';
     if (!scoreSavedThisRun && pendingRun && pendingRun.score > 0) {
       commitRunScore();
     }
     scoreSavedThisRun = false;
     pendingRun = null;
+    currentRunId = crypto.randomUUID?.() || `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    currentRunCountedStart = false;
+    api.notifyPlayStart().then((ok) => {
+      if (ok) currentRunCountedStart = true;
+      syncLeaderboardUI();
+    });
     $('player-name').value = ''; // Fresh callsign for the next booth visitor
+    $('gameover-panel').hidden = true;
+  } else if (evt === 'title') {
+    phase = 'menu';
+    setRailFocus(0);
+    if (!scoreSavedThisRun && pendingRun && pendingRun.score > 0) {
+      commitRunScore();
+    }
+    scoreSavedThisRun = false;
+    pendingRun = null;
+    $('player-name').value = '';
     $('gameover-panel').hidden = true;
   } else if (evt === 'gameover') {
     const sc = Math.round(d.score || 0);
@@ -279,7 +333,12 @@ function onGameEvent(evt, d = {}) {
     $('go-perf').textContent = String(d.perfects || 0);
     $('go-reason-val').textContent = d.fatalText || 'Time up';
 
-    const rank = board.filter((b) => b.score > sc).length + 1;
+    if (api.state.user) {
+      syncAvatarPicker(api.state.user.avatar);
+      $('player-name').value = api.state.user.displayName;
+    }
+
+    const rank = todayBoard.filter((b) => b.score > sc).length + 1;
     const tag = $('go-rank-tag');
     if (sc > 0 && rank <= 10) {
       tag.textContent = `New #${rank} on today\u2019s board`;
@@ -289,17 +348,28 @@ function onGameEvent(evt, d = {}) {
       tag.classList.remove('high');
     }
 
-    const canSave = sc > 0;
-    pendingRun = canSave ? {
+    const runPayload = {
+      clientRunId: currentRunId || `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      countedStart: currentRunCountedStart,
       score: sc,
       level: d.level || 1,
       maxCombo: d.maxCombo || 0,
       perfects: d.perfects || 0,
       hits: d.hits || 0,
       runTime: Number((d.runTime || 0).toFixed(1)),
-    } : null;
+      fatalText: d.fatalText || 'Time up',
+      at: new Date().toISOString(),
+      timeLabel: formatClockTime(),
+      dayKey: todayKey(),
+    };
+
+    const provisionalName = api.state.user?.displayName || (sc > 0 ? `PLAYER #${runSeq + 1}` : 'ANON');
+    api.submitRun({ ...runPayload, name: provisionalName, avatar: selectedAvatar }, lbScope).then(applyServerState);
+
+    const canSave = sc > 0;
+    pendingRun = canSave ? runPayload : null;
     lastRun = canSave ? {
-      name: `PLAYER #${runSeq + 1}`,
+      name: provisionalName,
       score: sc,
       level: d.level || 1,
       rank,
@@ -414,11 +484,147 @@ function toMenu() {
 function openLeaderboard() {
   openModal('leaderboard-modal', true);
   $('lb-close-btn').focus();
+  api.fetchState(lbScope).then(applyServerState);
 }
 function closeLeaderboard() {
   openModal('leaderboard-modal', false);
   if (demo.state.mode === 'title') document.activeElement?.blur?.();
 }
+
+const SCOPE_TITLES = {
+  today: 'Today\u2019s top 10',
+  openhouse: 'Open House 2026 top 10',
+  all: 'All-time top 10',
+};
+document.querySelectorAll('#leaderboard-modal .lb-tab[data-scope]').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    const next = tab.dataset.scope || 'today';
+    lbScope = next;
+    document.querySelectorAll('#leaderboard-modal .lb-tab[data-scope]').forEach((t) => {
+      const on = t === tab;
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    $('lb-title').textContent = SCOPE_TITLES[next] || SCOPE_TITLES.today;
+    if (api.state.online) {
+      api.fetchState(lbScope).then(applyServerState);
+    } else {
+      board = next === 'today' ? [...todayBoard] : [...todayBoard];
+      syncLeaderboardUI();
+    }
+  });
+});
+
+// ---------- Account Modal (Sign in / Create account / Guest)
+let authMode = 'login';
+let authAvatar = AVATARS[0].id;
+const authAvPicker = $('auth-avatar-picker');
+authAvPicker.innerHTML = AVATARS.map((a, i) => (
+  `<button type="button" class="av-opt${i === 0 ? ' active' : ''}" data-av="${a.id}" title="${a.label}">${a.svg}</button>`
+)).join('');
+authAvPicker.addEventListener('click', (e) => {
+  const btn = e.target.closest('.av-opt');
+  if (!btn) return;
+  authAvatar = btn.dataset.av;
+  authAvPicker.querySelectorAll('.av-opt').forEach((b) => b.classList.toggle('active', b === btn));
+});
+
+function setAuthMode(mode) {
+  authMode = mode;
+  const reg = mode === 'register';
+  $('tab-login').classList.toggle('active', !reg);
+  $('tab-register').classList.toggle('active', reg);
+  $('auth-name-wrap').hidden = !reg;
+  $('auth-av-wrap').hidden = !reg;
+  $('auth-submit').textContent = reg ? 'Create account' : 'Sign in';
+  $('auth-msg').hidden = true;
+}
+$('tab-login').addEventListener('click', () => setAuthMode('login'));
+$('tab-register').addEventListener('click', () => setAuthMode('register'));
+
+function syncAccountUI() {
+  const u = api.state.user;
+  $('btn-account').textContent = u ? `Account: ${u.displayName}` : 'Account';
+  $('acct-signed-out').hidden = Boolean(u);
+  $('acct-signed-in').hidden = !u;
+  if (u) {
+    $('acct-av').innerHTML = getAvatar(u.avatar).svg;
+    $('acct-name').textContent = u.displayName;
+    $('acct-user').textContent = `@${u.username}`;
+    $('acct-best').textContent = fmtScore(u.bestScore);
+    $('acct-runs').textContent = `${fmtScore(u.totalRuns)} runs`;
+  }
+  const serverInput = $('acct-server-url');
+  if (serverInput && document.activeElement !== serverInput) serverInput.value = api.state.apiBase || '';
+  const pendingSuffix = api.state.pendingCount > 0 ? ` (${api.state.pendingCount} queued)` : '';
+  $('acct-conn-status').textContent = api.state.online
+    ? `${api.state.apiBase ? 'Connected to VPS' : 'Connected (local)'}${pendingSuffix}`
+    : `Offline${pendingSuffix}`;
+}
+syncAccountUI();
+
+function openAccount() {
+  setAuthMode('login');
+  syncAccountUI();
+  openModal('account-modal', true);
+  if (api.state.user) $('acct-done').focus();
+  else $('auth-username').focus();
+}
+function closeAccount() {
+  openModal('account-modal', false);
+  if (demo.state.mode === 'title') document.activeElement?.blur?.();
+}
+
+$('btn-account').addEventListener('click', openAccount);
+$('acct-close').addEventListener('click', closeAccount);
+$('acct-done').addEventListener('click', closeAccount);
+$('acct-guest-btn').addEventListener('click', closeAccount);
+$('account-modal').addEventListener('click', (e) => { if (e.target === $('account-modal')) closeAccount(); });
+
+$('auth-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = $('auth-msg');
+  msg.hidden = true;
+  const username = $('auth-username').value.trim();
+  const password = $('auth-password').value;
+  if (!api.state.online) {
+    const check = await api.fetchState(lbScope);
+    if (!check) {
+      msg.textContent = 'Start the server (node server.mjs) to use accounts.';
+      msg.hidden = false;
+      return;
+    }
+  }
+  const res = authMode === 'register'
+    ? await api.register({ username, password, displayName: $('auth-display').value.trim(), avatar: authAvatar })
+    : await api.login({ username, password });
+  if (!res?.ok) {
+    msg.textContent = res?.error || 'Could not complete request.';
+    msg.hidden = false;
+    return;
+  }
+  $('auth-password').value = '';
+  syncAccountUI();
+  if (res.user?.avatar) syncAvatarPicker(res.user.avatar);
+  api.fetchState(lbScope).then(applyServerState);
+});
+
+$('acct-logout').addEventListener('click', async () => {
+  await api.logout();
+  syncAccountUI();
+  setAuthMode('login');
+});
+
+$('acct-server-save').addEventListener('click', async () => {
+  const btn = $('acct-server-save');
+  btn.disabled = true;
+  btn.textContent = 'Connecting…';
+  const res = await api.setApiBase($('acct-server-url').value.trim());
+  btn.disabled = false;
+  btn.textContent = 'Connect';
+  if (res) applyServerState(res);
+  else syncAccountUI();
+});
 
 $('tut-close').addEventListener('click', () => closeTutorial());
 $('tut-play').addEventListener('click', () => {
@@ -434,7 +640,7 @@ $('lb-close-btn').addEventListener('click', closeLeaderboard);
 $('leaderboard-modal').addEventListener('click', (e) => { if (e.target === $('leaderboard-modal')) closeLeaderboard(); });
 
 let resetConfirmTimer = null;
-$('lb-reset').addEventListener('click', () => {
+$('lb-reset').addEventListener('click', async () => {
   const btn = $('lb-reset');
   if (!resetConfirmTimer) {
     btn.textContent = 'Press again to clear';
@@ -446,8 +652,24 @@ $('lb-reset').addEventListener('click', () => {
   }
   clearTimeout(resetConfirmTimer);
   resetConfirmTimer = null;
+
+  if (api.state.online) {
+    const key = api.state.adminProtected ? (window.prompt('Enter admin key to clear today\u2019s live board:') || '') : '';
+    if (api.state.adminProtected && !key) {
+      btn.textContent = 'Clear today\u2019s scores';
+      return;
+    }
+    const r = await api.clearToday(key);
+    if (!r.ok) {
+      btn.textContent = 'Admin key rejected';
+      setTimeout(() => { btn.textContent = 'Clear today\u2019s scores'; }, 2000);
+      return;
+    }
+  }
+
   btn.textContent = 'Clear today\u2019s scores';
   board = [];
+  todayBoard = [];
   runLog = [];
   runSeq = 0;
   lastRun = null;
@@ -463,6 +685,13 @@ $('lb-reset').addEventListener('click', () => {
 });
 
 $('lb-export').addEventListener('click', () => {
+  if (api.state.online) {
+    const a = document.createElement('a');
+    a.href = api.getExportUrl();
+    a.download = `ticklock-scores-${todayKey()}.csv`;
+    a.click();
+    return;
+  }
   const rows = runLog.length > 0 ? runLog : board;
   const header = 'Timestamp,Time,Callsign,Score,SurvivalTime_s,Level,MaxCombo,Perfects,Avatar';
   const lines = rows.map((r) => [
@@ -483,6 +712,8 @@ $('lb-export').addEventListener('click', () => {
   a.click();
   URL.revokeObjectURL(a.href);
 });
+
+api.init().then(applyServerState);
 
 $('btn-start-main').addEventListener('click', () => { audio.unlock(); beginBrief(); });
 $('btn-menu-settings').addEventListener('click', () => { toggleSettings(); if (!$('settings-panel').hidden) $('sp-preset').focus(); });
@@ -586,14 +817,18 @@ window.addEventListener('keydown', (e) => {
   const settings = $('settings-panel');
   const tut = $('tutorial-modal');
   const lb = $('leaderboard-modal');
+  const acct = $('account-modal');
   if (e.code === 'Escape') {
     if (!settings.hidden) { toggleSettings(); return; }
     if (!tut.hidden) { closeTutorial(); return; }
     if (!lb.hidden) { closeLeaderboard(); return; }
+    if (!acct.hidden) { closeAccount(); return; }
     if (phase === 'ready') { toMenu(); return; }
     setPaused(demo.togglePause());
     return;
   }
+  // Account form keeps native keys while typing/focusing
+  if (!acct.hidden) return;
   // Settings controls keep their native keys (arrows move sliders, Space toggles the checkbox)
   if (!settings.hidden && settings.contains(document.activeElement)) return;
   if (!tut.hidden) {
@@ -667,7 +902,7 @@ function primaryPress() {
   else if (phase === 'brief') closeTutorial();
   else if (phase === 'menu' && !anyOverlayOpen()) beginBrief();
 }
-const anyOverlayOpen = () => !$('tutorial-modal').hidden || !$('leaderboard-modal').hidden || !$('settings-panel').hidden;
+const anyOverlayOpen = () => !$('tutorial-modal').hidden || !$('leaderboard-modal').hidden || !$('settings-panel').hidden || !$('account-modal').hidden;
 
 function setPaused(p) {
   document.body.dataset.paused = p ? 'true' : 'false';
@@ -711,7 +946,7 @@ function adaptQuality(avgMs) {
     perf.tier = drops;
   }
 }
-window.__ticklock = { state: demo.state, perf, stage };
+window.__ticklock = { state: demo.state, perf, stage, api };
 
 let last = performance.now();
 function frame(now) {

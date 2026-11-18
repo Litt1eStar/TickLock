@@ -401,6 +401,7 @@ kbd {
 #title-ui:not([hidden]) .rail-btn:nth-child(1) { animation-delay: 0.06s; }
 #title-ui:not([hidden]) .rail-btn:nth-child(2) { animation-delay: 0.1s; }
 #title-ui:not([hidden]) .rail-btn:nth-child(3) { animation-delay: 0.14s; }
+#title-ui:not([hidden]) .rail-btn:nth-child(4) { animation-delay: 0.18s; }
 #title-ui:not([hidden]) #menu-keys,
 #title-ui:not([hidden]) #credit { animation-delay: 0.2s; }
 #title-ui:not([hidden])::before { animation: fade-in 0.5s ease both; }
@@ -416,6 +417,7 @@ button:disabled, input:disabled, select:disabled { opacity: 0.45; cursor: not-al
 .modal-card button:focus-visible,
 #gameover-panel button:focus-visible,
 #player-name:focus-visible,
+.acct-input:focus-visible,
 #settings-panel :is(button, select, input):focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; transition: none; }
 
 /* ---------- Start cue: "Press Space to start", wiped away by the needle ---------- */
@@ -1054,6 +1056,98 @@ button:disabled, input:disabled, select:disabled { opacity: 0.45; cursor: not-al
 }
 .modal-foot button.danger-btn:hover {
   background: var(--red-hover);
+  color: var(--cream);
+}
+
+/* ---------- Leaderboard Scope Tabs, Live Counts & Account Modal ---------- */
+.lb-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.lb-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.lb-tab {
+  background: var(--surface);
+  color: var(--cream-dim);
+  border: 1px solid var(--cream-line);
+  border-radius: 4px;
+  padding: 4px 12px;
+  font: 600 14px var(--font);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.lb-tab:hover { color: var(--cream); border-color: var(--brass-dim); }
+.lb-tab.active {
+  background: var(--brass-fill);
+  border-color: var(--brass);
+  color: var(--brass);
+}
+.lb-stats {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--cream-muted);
+}
+
+.modal-card.acct-card { width: min(460px, 100%); }
+.acct-note {
+  margin: 0 0 12px;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--cream-mid);
+}
+.acct-tabs { margin-bottom: 12px; }
+.acct-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.acct-input {
+  width: 100%;
+  background: var(--surface);
+  color: var(--cream);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 8px 12px;
+  font: 600 15px var(--font);
+  user-select: text;
+  -webkit-user-select: text;
+}
+.acct-input:focus { outline: none; border-color: var(--brass); }
+.acct-msg {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--red);
+}
+.acct-msg[hidden], #acct-signed-out[hidden], #acct-signed-in[hidden], #auth-name-wrap[hidden], #auth-av-wrap[hidden] { display: none; }
+.acct-profile { grid-template-columns: 42px 1fr auto; margin-bottom: 16px; }
+.acct-server {
+  border-top: 1px solid var(--rule);
+  padding-top: 12px;
+  margin-top: 4px;
+}
+.acct-server button {
+  white-space: nowrap;
+  background: transparent;
+  color: var(--brass);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 8px 16px;
+  font: 700 14px var(--font);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.acct-server button:hover {
+  background: var(--brass-hover);
+  border-color: var(--brass);
   color: var(--cream);
 }
 

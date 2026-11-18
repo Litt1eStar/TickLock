@@ -1,0 +1,11 @@
+.git
+graft
+.playwright-mcp
+.agents
+art
+docs
+data/*.sqlite*
+.env
+*.blend
+*.blend1
+*.md

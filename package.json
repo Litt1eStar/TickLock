@@ -1,0 +1,14 @@
+{
+  "name": "tick-lock-3d",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Tick Lock 3D — One-button timing game with offline-resilient SQLite backend for KMUTT Open House 2026 & public VPS release",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "lint:ui": "node .agents/skills/hallmark/scripts/sloplint.mjs index.html src/style.css --genre atmospheric --scope app"
+  }
+}

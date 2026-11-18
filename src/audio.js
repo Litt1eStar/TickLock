@@ -93,9 +93,9 @@ export function createAudio() {
     }
   }
 
-  // Subtle procedural late-night studio pulse + clockwork tick while the timer is active.
+  // Procedural late-night studio pulse + clockwork tick during active play.
   function update(dt, s) {
-    if (!ctx || ctx.state !== 'running' || s.mode !== 'play' || s.paused || !s.clockStarted || s.freezeT > 0 || dt <= 0) {
+    if (!ctx || ctx.state !== 'running' || s.mode !== 'play' || s.paused || s.freezeT > 0 || dt <= 0) {
       return;
     }
     const bpm = Math.min(152, 100 + (s.level - 1) * 6) * (s.boost ? 1.22 : 1);
@@ -108,16 +108,24 @@ export function createAudio() {
     stepIdx += 1;
 
     if (beat % 2 === 0) {
-      tone(beat === 0 ? 1350 : 980, 'triangle', 0.016, 0.022, 320, 0);
+      tone(beat === 0 ? 1350 : 980, 'triangle', 0.022, 0.075, 320, 0);
+    } else {
+      tone(760, 'triangle', 0.014, 0.04, 280, 0);
     }
+
+    const root = s.flow ? 65.41 : 55.0;
     if (beat === 0 || beat === 4) {
-      const root = s.flow ? 65.41 : 55.0;
-      tone(root, 'triangle', 0.13, 0.045, root * 0.92, 0);
+      tone(root, 'triangle', 0.16, 0.13, root * 0.92, 0);
+    }
+    if (beat % 2 === 0) {
+      // Octave mid-bass layer so the pulse remains audible on laptop and booth speakers
+      const punch = beat === 0 ? 0.095 : 0.065;
+      tone(root * 2, 'triangle', 0.12, punch, root * 1.9, 0);
     }
     if (s.flow && beat % 2 === 1) {
       const notes = [220, 261.63, 329.63, 392.0];
       const f = notes[(beat >> 1) & 3];
-      tone(f, 'sine', 0.09, 0.024, f, 0);
+      tone(f, 'triangle', 0.11, 0.085, f, 0);
     }
   }
 

@@ -34,6 +34,7 @@
       <button id="btn-start-main" class="rail-btn is-primary active" data-idx="0" type="button">Play</button>
       <button id="btn-lb" class="rail-btn" data-idx="1" type="button">Leaderboard</button>
       <button id="btn-menu-settings" class="rail-btn" data-idx="2" type="button">Settings</button>
+      <button id="btn-account" class="rail-btn" data-idx="3" type="button">Account</button>
     </nav>
 
     <p id="menu-keys"><span><kbd>&uarr;</kbd><kbd>&darr;</kbd> choose</span><span><kbd>Enter</kbd> select</span></p>
@@ -130,6 +131,15 @@
         <button id="lb-close" class="modal-close" type="button" aria-label="Close"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
       </div>
 
+      <div class="lb-toolbar">
+        <div class="lb-tabs" role="tablist" aria-label="Leaderboard scope">
+          <button class="lb-tab active" data-scope="today" role="tab" aria-selected="true" type="button">Today</button>
+          <button class="lb-tab" data-scope="openhouse" role="tab" aria-selected="false" type="button">Open House 2026</button>
+          <button class="lb-tab" data-scope="all" role="tab" aria-selected="false" type="button">All time</button>
+        </div>
+        <p id="lb-stats" class="lb-stats">0 plays / 0 players</p>
+      </div>
+
       <div id="lb-podium" class="lb-podium"></div>
       <ol id="lb-tracks" class="lb-tracks"></ol>
       <div id="lb-self" class="lb-self" hidden></div>
@@ -140,6 +150,75 @@
           <button id="lb-export" type="button">Export CSV</button>
         </div>
         <button id="lb-close-btn" class="primary" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Player Account & Guest Profile Modal -->
+  <div id="account-modal" class="modal-backdrop" hidden>
+    <div class="modal-card acct-card" role="dialog" aria-modal="true" aria-labelledby="acct-title">
+      <div class="modal-head">
+        <h2 id="acct-title">Player account</h2>
+        <button id="acct-close" class="modal-close" type="button" aria-label="Close"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+      </div>
+
+      <div id="acct-signed-out">
+        <p class="acct-note">Play as a guest and enter a name after each run, or sign in to keep your record and avatar across devices.</p>
+        <div class="lb-tabs acct-tabs" role="tablist" aria-label="Account mode">
+          <button id="tab-login" class="lb-tab active" type="button">Sign in</button>
+          <button id="tab-register" class="lb-tab" type="button">Create account</button>
+        </div>
+        <form id="auth-form" class="acct-form" autocomplete="off">
+          <label class="sp-row">
+            <span>Username</span>
+            <input id="auth-username" class="acct-input" type="text" maxlength="20" placeholder="letters, numbers, _ or -" spellcheck="false" required>
+          </label>
+          <label class="sp-row">
+            <span>Password</span>
+            <input id="auth-password" class="acct-input" type="password" maxlength="64" placeholder="4+ characters" required>
+          </label>
+          <label id="auth-name-wrap" class="sp-row" hidden>
+            <span>Display name on board</span>
+            <input id="auth-display" class="acct-input" type="text" maxlength="14" placeholder="Your callsign" spellcheck="false">
+          </label>
+          <div id="auth-av-wrap" class="sp-row" hidden>
+            <span>Profile avatar</span>
+            <div id="auth-avatar-picker" class="avatar-picker" role="radiogroup" aria-label="Account Avatar"></div>
+          </div>
+          <p id="auth-msg" class="acct-msg" hidden></p>
+          <div class="modal-foot">
+            <button id="acct-guest-btn" type="button">Continue as guest</button>
+            <button id="auth-submit" class="primary" type="submit">Sign in</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="acct-signed-in" hidden>
+        <div class="lb-self acct-profile">
+          <div id="acct-av" class="lb-av"></div>
+          <div class="trk-main">
+            <span id="acct-name" class="trk-nm">PLAYER</span>
+            <span id="acct-user" class="trk-sub">@username</span>
+          </div>
+          <div class="trk-right">
+            <span id="acct-best" class="trk-sc">0</span>
+            <span id="acct-runs" class="trk-sub">0 runs</span>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button id="acct-logout" class="danger-btn" type="button">Sign out</button>
+          <button id="acct-done" class="primary" type="button">Done</button>
+        </div>
+      </div>
+
+      <div class="acct-server">
+        <label class="sp-row">
+          <span>Server connection <em id="acct-conn-status">Checking…</em></span>
+          <div class="sf-row">
+            <input id="acct-server-url" class="acct-input" type="url" placeholder="Same server (or https://your-vps.com)" spellcheck="false">
+            <button id="acct-server-save" type="button">Connect</button>
+          </div>
+        </label>
       </div>
     </div>
   </div>

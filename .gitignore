@@ -4,3 +4,7 @@
 # screenshots from browser runs and Blender autosaves
 /.playwright-mcp/
 *.blend1
+
+# local SQLite database files and environment secrets
+/data/*.sqlite*
+.env

@@ -45,8 +45,11 @@ game's lock-picking minigame. **Only the mood was borrowed; the art and setting 
 ## 3. Running it
 
 ```bash
-# from the project root (TickLock/); any static server works
-python -m http.server 8642 --bind 127.0.0.1     # or: npx serve .
+# Recommended: full game + SQLite backend (runs on Node >= 22.13 with zero npm dependencies)
+node server.mjs     # or: npm start
+
+# Offline / static-only fallback (uses localStorage + outbox queue):
+python -m http.server 8642 --bind 127.0.0.1
 ```
 
 - Open `http://127.0.0.1:8642/`. It **must be served over HTTP**; `file://` blocks the module scripts and the `.glb`.
@@ -88,20 +91,26 @@ one-second average frame time, `stage` the object from `createStage()`.
 ```
 TickLock/
 ├── HANDOFF.md                     ← this file
+├── server.mjs                     ← zero-dependency HTTP + SQLite backend (`node:sqlite`, auth, runs, CSV, static assets)
+├── package.json                   ← Node scripts (`npm start`, `npm run lint:ui`)
+├── .env.example                   ← PORT, HOST, DB_PATH, TICKLOCK_MODE (openhouse|public), ADMIN_KEY
+├── Dockerfile / docker-compose.yml ← container deployment with persistent ./data:/app/data volume
+├── deploy/                        ← ticklock.service (systemd) and Caddyfile (auto-HTTPS reverse proxy)
 ├── tick-lock-game-design.md       ← game design doc (rules, constants, progression, booth notes)
 ├── docs/superpowers/specs/2026-11-17-tick-lock-3d-visual-design.md
 │                                  ← visual spec (§2.1 late-night mood, §2.2 single-pass & UI, §5 asset contract)
 ├── index.html                     ← all DOM: boot screen, menu, start cue, panels, modals, controls; import map
 ├── src/
-│   ├── main.js     ← entry: boot sequence, event bus, menu flow, leaderboard, settings, input, frame loop
+│   ├── main.js     ← entry: boot sequence, event bus, menu flow, leaderboard, account UI, settings, input, loop
+│   ├── api.js      ← offline-resilient REST client + localStorage run outbox queue
 │   ├── scene.js    ← renderer, camera, lights, fog, glb load + material conversion, grade, halos, visuals settings
 │   ├── game.js     ← the game rules and state (createGame)
 │   ├── dial.js     ← zone band shader, violet beam needle, sweep trail, ring flash
 │   ├── hud.js      ← canvas textures on the record label (hub) and the studio monitor
 │   ├── fx.js       ← particles, floating text, light/prop reactions, ON AIR sign, shackle, camera rig
 │   ├── pause3d.js  ← pause menu drawn on a plane in the 3D scene, raycast clicks
-│   ├── audio.js    ← WebAudio oscillator sounds per game event
-│   ├── avatars.js  ← SVG avatars for the leaderboard
+│   ├── audio.js    ← WebAudio oscillator sounds + procedural studio beat
+│   ├── avatars.js  ← SVG avatars for leaderboard and accounts
 │   └── style.css   ← all 2D UI styles and `:root` tokens
 ├── assets/studio.glb              ← exported Blender scene (about 6.6 MB with baked JPEG textures)
 ├── art/tick-lock-studio.blend     ← Blender source
@@ -324,14 +333,32 @@ const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
 
 ---
 
-## 13. Known gaps and loose ends
+## 13. Backend, Data Collection & VPS Deployment (`server.mjs`)
 
-1. **Sample leaderboard** (`SEED_BOARD`) shows made-up names and scores until `Clear today's scores` is pressed before the booth opens (§9). After clearing once, empty `[]` stays empty across refreshes and rolls over cleanly each calendar day (`ticklock_lb_date`).
-2. **Booth playtesting** remains: run live visitors through levels 1–8+ at the booth and export `ticklock_history` CSV to validate target run durations (~30–60 s).
+- **SQLite storage (`data/ticklock.sqlite`, WAL mode):**
+  - `meta` (`total_plays` incremented on every run start), `runs` (all finished runs including score 0 with `client_run_id`, `is_guest`, `event_tag` `'openhouse'`/`'public'`, `day_key`, `cleared_today`), `users` (`scrypt` salted password hash, `best_score`, `total_runs`), and `sessions` (30-day Bearer tokens).
+  - Offline safety: `src/api.js` queues runs in `ticklock_outbox` (`localStorage`) if the server is unreachable and flushes them on reconnect.
+- **Endpoints:**
+  - `GET /api/health` (VPS healthcheck), `GET /api/state?scope=today|openhouse|all`, `GET /api/runs/export.csv`
+  - `POST /api/plays/start`, `POST /api/runs`, `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `POST /api/admin/clear-today` (protected by `x-admin-key: ADMIN_KEY` in `public` mode).
+- **Deploying onto a VPS (Docker Compose):**
+  1. Copy the repository onto your VPS (optionally carrying `data/ticklock.sqlite` from Open House into `./data/`).
+  2. Copy `.env.example` to `.env`, set `TICKLOCK_MODE=public` and a strong `ADMIN_KEY=...`.
+  3. Run `docker compose up -d --build` (or `bash deploy/deploy-vps.sh`). SQLite persists in `./data/ticklock.sqlite` across rebuilds. Optionally put `deploy/Caddyfile` in front for automatic HTTPS.
+- **Syncing a local booth copy to your VPS:**
+  - **Browser-direct:** open the Account modal and paste your VPS URL (`https://your-vps.com` or `http://<vps-ip>:8642`) in **Server connection** (or launch with `?api=https://your-vps.com`). Queued booth runs flush automatically when online.
+  - **Dual local + VPS mirror:** run `node server.mjs` on the booth laptop with `UPSTREAM_URL=https://your-vps.com` in `.env` so every run saves both to local `data/ticklock.sqlite` and to the remote VPS.
 
 ---
 
-## 14. The user
+## 14. Known gaps and loose ends
+
+1. **Sample leaderboard** (`SEED_BOARD`) only populates offline `localStorage` when never initialized and has no backend rows yet; clear via `"Clear today's scores"` before opening at the booth (§9).
+2. **Booth playtesting** remains: validate live visitor run durations (~30–60 s) and export full history via `/api/runs/export.csv`.
+
+---
+
+## 15. The user
 
 - A university student building this for the CMM KMUTT Open House booth. They give feedback with screenshots, decide quickly and usually take the recommended option.
 - **Performance-sensitive:** they have reported lag and black flashes. Verify fps after visual changes and avoid heavy effects.
@@ -341,7 +368,7 @@ const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
 
 ---
 
-## 15. Checklist for the next agent
+## 16. Checklist for the next agent
 
 1. `git status` and `git log`: see what is committed, and ask about the uncommitted edits (§4).
 2. Serve the project (§3), press F, play through the menu flow and a run, use debug keys 1 to 7 to see every effect.

@@ -1008,24 +1008,18 @@ button:disabled, input:disabled, select:disabled { opacity: 0.45; cursor: not-al
 .trk-lv { font-size: 14px; font-weight: 700; color: var(--cream); }
 .trk-sub { font-size: 12px; font-weight: 600; color: var(--cream-muted); }
 
-/* Pinned Current-Player Footer Bar */
-.lb-self {
+/* Account Profile Card */
+.acct-profile {
   display: grid;
-  grid-template-columns: 44px 42px 1fr auto;
+  grid-template-columns: 42px 1fr auto;
   align-items: center;
   gap: 12px;
   padding: 8px 12px;
+  margin-bottom: 16px;
   background: linear-gradient(90deg, var(--brass-fill), var(--brass-soft));
   border: 1px solid var(--brass);
   border-radius: 4px;
   font-variant-numeric: tabular-nums;
-}
-.lb-self[hidden] { display: none; }
-.lb-self .self-rk {
-  font-size: 20px;
-  font-weight: 700;
-  text-align: center;
-  color: var(--brass);
 }
 .lb-empty {
   text-align: center;
@@ -1120,7 +1114,6 @@ button:disabled, input:disabled, select:disabled { opacity: 0.45; cursor: not-al
   color: var(--red);
 }
 .acct-msg[hidden], #acct-signed-out[hidden], #acct-signed-in[hidden], #auth-name-wrap[hidden], #auth-av-wrap[hidden] { display: none; }
-.acct-profile { grid-template-columns: 42px 1fr auto; margin-bottom: 16px; }
 .acct-server {
   border-top: 1px solid var(--rule);
   padding-top: 12px;

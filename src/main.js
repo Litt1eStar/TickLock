@@ -184,14 +184,12 @@ function syncLeaderboardUI() {
   // The studio monitor always shows today's top five + live play counter on the menu
   hud.setBoard(todayBoard, { totalPlays: playsCount, uniquePlayers: playersCount });
 
-  // Studio Ranking: Olympic Hanging Podium (#2 Left, #1 Center, #3 Right) + Ranked List + Pinned Current Player
+  // Studio Ranking: Olympic Hanging Podium (#2 Left, #1 Center, #3 Right) + Ranked List
   const podium = $('lb-podium');
   const tracks = $('lb-tracks');
-  const selfBar = $('lb-self');
   if (board.length === 0) {
     podium.innerHTML = '';
     tracks.innerHTML = '<li class="lb-empty">No scores yet for this view. Set the first one.</li>';
-    selfBar.hidden = true;
   } else {
     const order = [1, 0, 2]; // #2 Left, #1 Center, #3 Right
     podium.innerHTML = order.map((idx) => {
@@ -224,24 +222,6 @@ function syncLeaderboardUI() {
         </div>
       </li>`;
     }).join('');
-
-    if (lastRun) {
-      const av = getAvatar(lastRun.avatar || selectedAvatar);
-      selfBar.hidden = false;
-      selfBar.innerHTML = `
-        <span class="self-rk">${lastRun.rank <= 10 ? `#${lastRun.rank}` : '—'}</span>
-        <div class="lb-av">${av.svg}</div>
-        <div class="trk-main">
-          <span class="trk-nm">${escHtml(lastRun.name)}</span>
-          <span class="trk-sc">${fmtScore(lastRun.score)}</span>
-        </div>
-        <div class="trk-right">
-          <span class="trk-lv">Level ${lastRun.level}</span>
-          <span class="trk-sub">Your run</span>
-        </div>`;
-    } else {
-      selfBar.hidden = true;
-    }
   }
 }
 syncLeaderboardUI();

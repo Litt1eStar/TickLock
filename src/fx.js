@@ -7,6 +7,7 @@ const MAX_PARTICLES = 320;
 const DUST_COUNT = 40;
 const SHACKLE_OPEN = 0.38;       // shackle lifted while the lock is "being picked"
 const SPARK_RATE = 20;         // delicate sparkles per second from the needle tip while playing
+const REDUCED_MOTION = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 // Soft additive dots with per-particle size and twinkle. Used for bursts, the needle sparkle trail and dust.
 function makeParticleMaterial() {
@@ -209,6 +210,7 @@ export function createFx(stage, dom) {
   const st = {
     pump: 0, shake: 0, glitch: 0, recMiss: 0, camFlash: 0,
     dim: 0, dimTarget: 0, swell: 0, white: 0, missDip: 0, signFlare: 0, red: 0,
+    onAir: 0.12, ignite: 0,   // ON AIR sign: dim on the menu, lit (after a neon flicker) once a run starts
     shackle: SHACKLE_OPEN, shackleFrom: SHACKLE_OPEN, shackleTo: SHACKLE_OPEN, shackleT: 1, shackleDur: 0.3,
     parallax: new THREE.Vector2(), push: 0, punch: 0, overCam: 0, pauseCam: 0, softHit: 0, softColor: new THREE.Color(),
   };
@@ -239,7 +241,7 @@ export function createFx(stage, dom) {
         break;
       case 'recovery':
         burst(d.angle, 0x42ffa1, 55, 2.4);
-        floatText('SAVED! +1.5s', d.angle, 1.48, '#42ffa1', true);
+        floatText('SAVED! +1.2s', d.angle, 1.48, '#42ffa1', true);
         st.punch = Math.max(st.punch, 0.85); st.swell = 1;
         break;
       case 'flow':
@@ -250,7 +252,7 @@ export function createFx(stage, dom) {
       case 'graze':
         burst(d.angle, 0xff9238, 22, 1.5);
         stage.dial.ringFlash(0xff9238, 0.65);
-        floatText(`SO CLOSE! (${d.deg}° ${d.timing}) −0.5s`, d.angle, 1.24, '#ffb347', true);
+        floatText(`SO CLOSE! (${d.deg}° ${d.timing}) −0.4s`, d.angle, 1.24, '#ffb347', true);
         st.shake = 0.45; st.red = Math.max(st.red, 0.18);
         break;
       case 'miss': {
@@ -271,6 +273,7 @@ export function createFx(stage, dom) {
         break;
       case 'start':
         st.dimTarget = 0; moveShackle(SHACKLE_OPEN, 0.35);
+        if (st.onAir < 0.5) st.ignite = REDUCED_MOTION ? 0 : 0.55;
         break;
       case 'gameover':
         st.dimTarget = 1; st.shake = 0.7; moveShackle(0, 0.28);
@@ -308,6 +311,9 @@ export function createFx(stage, dom) {
     st.white = decay(st.white, dt, 0.2);
     st.missDip = decay(st.missDip, dt, 0.4);
     st.signFlare = decay(st.signFlare, dt, 0.6);
+    st.ignite = Math.max(0, st.ignite - dt);
+    const onAirTarget = s.mode === 'title' ? 0.12 : 1;
+    st.onAir += (onAirTarget - st.onAir) * Math.min(1, dt * (onAirTarget > st.onAir ? 9 : 2.5));
     st.softHit = decay(st.softHit, dt, 0.3);
     st.red = Math.max(st.dim * 0.3, decay(st.red, dt, 0.35));
 
@@ -350,9 +356,12 @@ export function createFx(stage, dom) {
     // ON AIR sign: slow hum, flares on level up, stutters on a miss
     const hum = 0.9 + 0.1 * Math.sin(clock * 2.2);
     const stutter = st.missDip > 0 && Math.random() < 0.45 ? 0.1 : 1;
-    const signK = hum * stutter * (1 + 1.6 * st.signFlare);
+    // neon ignition: a few hard on/off stutters before the tube holds
+    const igniteK = st.ignite > 0 ? (Math.sin(st.ignite * 61) > 0.15 ? 1 : 0.08) : 1;
+    const signK = hum * stutter * (1 + 1.6 * st.signFlare) * st.onAir * igniteK;
     lights.sign.intensity = lights.sign.userData.base.intensity * bMult * signK;
     if (signGlow) signGlow.material.emissiveIntensity = 5.5 * vis.glow * signK;
+    if (stage.halos?.sign) stage.halos.sign.material.opacity = 0.32 * vis.glow * Math.min(1, signK);
 
     // softboxes are "off" at night; they pulse faintly with hit colour
     for (const p of panels) {

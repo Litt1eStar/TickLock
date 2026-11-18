@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Tick Lock — CMM KMUTT Open House</title>
+  <title>Tick Lock: CMM KMUTT Open House</title>
+  <meta name="description" content="Tick Lock, a one-button timing game by Muasoom Studio for the CMM KMUTT Open House.">
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="src/style.css">
   <script type="importmap">
@@ -22,133 +23,111 @@
   <div id="floats"></div>
   <div id="flash"></div>
 
-  <!-- Main Menu Overlay (Studio Broadcast Left-Rail, center stays open for the 3D lock) -->
-  <section id="title-ui">
-    <header id="brand-header">
-      <div class="brand-studio"><span class="rec-dot"></span>REC &nbsp;·&nbsp; MUASOOM STUDIO</div>
-      <h1 class="brand-title">TICK LOCK</h1>
-      <div class="brand-sub">DEVELOPED BY LITT1ESTAR &nbsp;//&nbsp; CH-01 STANDBY</div>
+  <!-- Main menu: the lock stays centre stage; the leaderboard lives on the studio monitor -->
+  <section id="title-ui" hidden>
+    <header id="brand">
+      <p class="brand-studio">Muasoom Studio</p>
+      <h1 class="brand-title">Tick Lock</h1>
     </header>
 
-    <nav id="menu-rail" aria-label="Main Menu">
-      <button id="btn-start-main" class="rail-btn active" data-idx="0" type="button">
-        <span class="rail-num">01</span>
-        <span class="rail-label">PLAY</span>
-      </button>
-      <button id="btn-howto" class="rail-btn" data-idx="1" type="button">
-        <span class="rail-num">02</span>
-        <span class="rail-label">HOW TO PLAY</span>
-      </button>
-      <button id="btn-lb" class="rail-btn" data-idx="2" type="button">
-        <span class="rail-num">03</span>
-        <span class="rail-label">LEADERBOARD</span>
-      </button>
-      <button id="btn-menu-settings" class="rail-btn" data-idx="3" type="button">
-        <span class="rail-num">04</span>
-        <span class="rail-label">SETTINGS</span>
-      </button>
+    <nav id="menu-rail" aria-label="Main menu">
+      <button id="btn-start-main" class="rail-btn is-primary active" data-idx="0" type="button">Play</button>
+      <button id="btn-lb" class="rail-btn" data-idx="1" type="button">Leaderboard</button>
+      <button id="btn-menu-settings" class="rail-btn" data-idx="2" type="button">Settings</button>
     </nav>
 
-    <aside id="title-lb">
-      <div class="tlb-head">
-        <span>TOP SCORES // TODAY</span>
-        <button id="btn-open-lb-side" type="button">FULL BOARD</button>
-      </div>
-      <ol id="title-lb-list"></ol>
-    </aside>
+    <p id="menu-keys"><span><kbd>&uarr;</kbd><kbd>&darr;</kbd> choose</span><span><kbd>Enter</kbd> select</span></p>
+    <p id="credit">Developed by Litt1eStar</p>
   </section>
+
+  <!-- After the briefing: one prompt, wiped away by the needle when Space is pressed -->
+  <div id="ready-cue" hidden>
+    <p class="cue-line" aria-live="polite"><span class="cue-text">Press</span><kbd class="cue-key">Space</kbd><span class="cue-text">to start</span></p>
+    <span class="cue-needle" aria-hidden="true"></span>
+  </div>
 
   <!-- Contextual Tutorial Banner (First-Hit Clock Freeze + Level 1 micro-tips) -->
   <div id="tutorial-banner" hidden></div>
 
   <!-- Game Over Results & High Score Name Entry Panel -->
   <aside id="gameover-panel" hidden>
-    <div class="go-tag" id="go-rank-tag">SIGNAL LOST // LOCKED OUT</div>
-    <h2 class="go-score" id="go-score-val">0</h2>
+    <h2 class="go-tag" id="go-rank-tag">Locked out</h2>
+    <p class="go-score" id="go-score-val">0</p>
     <div class="go-reason" id="go-reason-val"></div>
 
     <div class="go-stats">
-      <div><span>LEVEL</span><strong id="go-lv">1</strong></div>
-      <div><span>MAX COMBO</span><strong id="go-combo">×0</strong></div>
-      <div><span>HITS</span><strong id="go-hits">0</strong></div>
-      <div><span>PERFECTS</span><strong id="go-perf">0</strong></div>
+      <div><span>Level</span><strong id="go-lv">1</strong></div>
+      <div><span>Best combo</span><strong id="go-combo">×0</strong></div>
+      <div><span>Hits</span><strong id="go-hits">0</strong></div>
+      <div><span>Perfect</span><strong id="go-perf">0</strong></div>
     </div>
 
     <form id="score-form" autocomplete="off">
-      <label for="player-name">SELECT AVATAR &amp; CALLSIGN</label>
+      <label for="player-name">Pick an avatar and your name</label>
       <div id="avatar-picker" class="avatar-picker" role="radiogroup" aria-label="Profile Avatar"></div>
       <div class="sf-row">
-        <input id="player-name" type="text" maxlength="14" placeholder="ENTER CALLSIGN" spellcheck="false">
-        <button id="btn-save-score" type="submit">SAVE</button>
+        <input id="player-name" type="text" maxlength="14" placeholder="Your name" spellcheck="false">
+        <button id="btn-save-score" type="submit">Save score</button>
       </div>
-      <div id="score-saved-msg" hidden>RECORD LOGGED TO LEADERBOARD</div>
+      <div id="score-saved-msg" hidden>Saved to today&rsquo;s board</div>
     </form>
 
     <div class="go-actions">
-      <button id="btn-retry" class="primary" type="button">RETRY</button>
-      <button id="btn-go-lb" type="button">LEADERBOARD</button>
-      <button id="btn-go-title" type="button">MAIN MENU</button>
+      <button id="btn-retry" class="primary" type="button">Play again</button>
+      <button id="btn-go-lb" type="button">Leaderboard</button>
+      <button id="btn-go-title" type="button">Main menu</button>
     </div>
   </aside>
 
-  <!-- 3-Card Visual Tutorial ("HOW TO PLAY") Modal -->
+  <!-- How to play: shown every time a player chooses Play, and on H during a run -->
   <div id="tutorial-modal" class="modal-backdrop" hidden>
-    <div class="modal-card">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="tut-title">
       <div class="modal-head">
-        <div>
-          <span class="modal-kicker">DECK 02 // OPERATOR BRIEFING</span>
-          <h2>HOW TO PLAY TICK LOCK</h2>
-        </div>
-        <button id="tut-close" class="modal-close" type="button" aria-label="Close">✕</button>
+        <h2 id="tut-title">How to play</h2>
+        <button id="tut-close" class="modal-close" type="button" aria-label="Close"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
       </div>
 
       <div class="tut-grid">
         <article class="tut-item">
-          <div class="tut-num">01 // PICK &amp; REVERSE</div>
           <div class="tut-diagram diag-pick">
             <span class="diag-zone"></span>
             <span class="diag-core"></span>
             <span class="diag-needle"></span>
           </div>
-          <h3>HIT THE ZONE</h3>
-          <p>Press <strong>SPACE</strong> or <strong>TAP</strong> inside a <strong>Gold Zone</strong> (or <strong>Blue Zone</strong> for <strong>+2.0s</strong>). Every hit <strong>reverses the needle</strong>. Hit the white core for <strong>PERFECT (×2)</strong>.</p>
+          <h3>Hit the zone</h3>
+          <p>Press <strong>Space</strong> while the needle is inside a <strong>gold zone</strong>. Every hit turns the needle around. Hit the white centre for a <strong>perfect</strong>, worth double. <strong>Blue zones</strong> add 2 seconds.</p>
         </article>
 
         <article class="tut-item">
-          <div class="tut-num">02 // GRAZE &amp; RECOVERY</div>
           <div class="tut-diagram diag-rec">
             <span class="diag-ghost"></span>
             <span class="diag-rec-zone"></span>
           </div>
-          <h3>CLUTCH RECOVERY</h3>
-          <p>A near-miss triggers a <strong>GRAZE (−0.5s)</strong>. A full miss costs <strong>−1.5s</strong>, but spawns a pulsing <strong>Recovery Zone</strong> ahead—hit it on the next beat for <strong>SAVED +1.5s</strong> and half your combo.</p>
+          <h3>Miss, then save it</h3>
+          <p>A near miss costs <strong>0.4 seconds</strong>. A full miss costs <strong>1.2 seconds</strong> and opens a green <strong>recovery zone</strong> ahead. Hit it to win the time back and keep half your combo.</p>
         </article>
 
         <article class="tut-item">
-          <div class="tut-num">03 // BOOST &amp; FLOW</div>
           <div class="tut-diagram diag-flow">
-            <span class="diag-flow-badge">FLOW ×10</span>
+            <span class="diag-flow-badge">×10</span>
           </div>
-          <h3>HIGH-SCORE MULTIPLIER</h3>
-          <p>Hold <strong>SHIFT</strong> to sweep <strong>1.8× faster</strong> for <strong>2× score</strong>. Chain <strong>10 hits</strong> to enter <strong>FLOW STATE (×1.25)</strong>. The 30s clock stays paused until your first hit.</p>
+          <h3>Score more</h3>
+          <p>Hold <strong>Shift</strong> to sweep 1.8 times faster for <strong>double points</strong>. Ten hits in a row starts <strong>flow</strong>, worth 1.25 times. The 30-second clock waits for your first hit.</p>
         </article>
       </div>
 
       <div class="modal-foot">
-        <button id="tut-play" class="primary" type="button">DEPLOY TO LOCK <kbd>SPACE</kbd></button>
+        <button id="tut-play" class="primary" type="button">Got it <kbd>Space</kbd></button>
       </div>
     </div>
   </div>
 
-  <!-- Top-10 Arcade Leaderboard Modal -->
+   Arcade Leaderboard Modal -->
   <div id="leaderboard-modal" class="modal-backdrop" hidden>
-    <div class="modal-card lb-card">
+    <div class="modal-card lb-card" role="dialog" aria-modal="true" aria-labelledby="lb-title">
       <div class="modal-head">
-        <div>
-          <span class="modal-kicker">DECK 03 // DAILY TELEMETRY</span>
-          <h2>TOP 10 LEADERBOARD</h2>
-        </div>
-        <button id="lb-close" class="modal-close" type="button" aria-label="Close">✕</button>
+        <h2 id="lb-title">Today&rsquo;s top 10</h2>
+        <button id="lb-close" class="modal-close" type="button" aria-label="Close"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
       </div>
 
       <div id="lb-podium" class="lb-podium"></div>
@@ -157,79 +136,89 @@
 
       <div class="modal-foot lb-foot">
         <div class="lb-admin-btns">
-          <button id="lb-reset" class="danger-btn" type="button">RESET DAY'S SCORES (BOOTH)</button>
-          <button id="lb-export" type="button">EXPORT CSV</button>
+          <button id="lb-reset" class="danger-btn" type="button">Clear today&rsquo;s scores</button>
+          <button id="lb-export" type="button">Export CSV</button>
         </div>
-        <button id="lb-close-btn" class="primary" type="button">CLOSE</button>
+        <button id="lb-close-btn" class="primary" type="button">Close</button>
       </div>
     </div>
   </div>
 
   <!-- In-game only control prompts (hidden on Title screen) -->
   <div id="controls">
-    <button id="btn-pick"     type="button"><span>PICK</span><kbd>SPACE</kbd></button>
-    <button id="btn-boost"    type="button"><span>SPEED BOOST (HOLD)</span><kbd>SHIFT</kbd></button>
-    <button id="btn-pause"    type="button"><span>PAUSE</span><kbd>P</kbd></button>
-    <button id="btn-settings" type="button"><span>SETTINGS</span><kbd>G</kbd></button>
+    <button id="btn-pick"     type="button"><span>Pick</span><kbd>Space</kbd></button>
+    <button id="btn-boost"    type="button"><span>Boost (hold)</span><kbd>Shift</kbd></button>
+    <button id="btn-pause"    type="button"><span>Pause</span><kbd>P</kbd></button>
+    <button id="btn-settings" type="button"><span>Settings</span><kbd>G</kbd></button>
   </div>
 
   <!-- Live Visual & Performance Settings Panel -->
-  <aside id="settings-panel" hidden>
+  <aside id="settings-panel" hidden aria-label="Settings">
     <div class="sp-head">
-      <span>VISUAL &amp; PERFORMANCE</span>
-      <button id="sp-close" type="button" aria-label="Close">✕</button>
+      <span>Settings</span>
+      <button id="sp-close" type="button" aria-label="Close"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
     </div>
 
     <label class="sp-row">
-      <span>DEVICE PRESET</span>
+      <span>Quality</span>
       <select id="sp-preset">
-        <option value="perf">Performance (Weak GPU / 120Hz)</option>
-        <option value="balanced" selected>Balanced (Recommended)</option>
-        <option value="ultra">Ultra (High-Res + Post Bloom)</option>
+        <option value="perf">Performance, for slower laptops</option>
+        <option value="balanced" selected>Balanced (recommended)</option>
+        <option value="ultra">Ultra, for strong graphics cards</option>
       </select>
     </label>
 
     <label class="sp-row">
-      <span>RENDER SCALE <em id="val-scale">90%</em></span>
+      <span>Render scale <em id="val-scale">90%</em></span>
       <input id="sp-scale" type="range" min="50" max="125" step="5" value="90">
     </label>
 
     <label class="sp-row">
-      <span>BRIGHTNESS <em id="val-bright">120%</em></span>
+      <span>Brightness <em id="val-bright">120%</em></span>
       <input id="sp-bright" type="range" min="60" max="200" step="5" value="120">
     </label>
 
     <label class="sp-row">
-      <span>CONTRAST <em id="val-contrast">105%</em></span>
+      <span>Contrast <em id="val-contrast">105%</em></span>
       <input id="sp-contrast" type="range" min="75" max="145" step="5" value="105">
     </label>
 
     <label class="sp-row">
-      <span>SATURATION <em id="val-sat">105%</em></span>
+      <span>Saturation <em id="val-sat">105%</em></span>
       <input id="sp-sat" type="range" min="60" max="150" step="5" value="105">
     </label>
 
     <label class="sp-row">
-      <span>BLOOM / GLOW <em id="val-glow">100%</em></span>
+      <span>Glow <em id="val-glow">100%</em></span>
       <input id="sp-glow" type="range" min="20" max="200" step="5" value="100">
     </label>
 
     <label class="sp-row">
-      <span>VIGNETTE <em id="val-vig">45%</em></span>
+      <span>Vignette <em id="val-vig">45%</em></span>
       <input id="sp-vig" type="range" min="0" max="85" step="5" value="45">
     </label>
 
     <label class="sp-row sp-check">
-      <span>PARTICLES &amp; LIGHT CONE</span>
+      <span>Particles and light beam</span>
       <input id="sp-particles" type="checkbox" checked>
     </label>
 
     <div class="sp-actions">
-      <button id="sp-reset" type="button">RESET DEFAULTS</button>
+      <button id="sp-reset" type="button">Reset to defaults</button>
     </div>
   </aside>
 
-  <div id="loading">LOADING STUDIO…</div>
+  <!-- Boot: real progress (fonts, studio.glb, shader compile), then fades into the lit scene -->
+  <div id="boot" role="status">
+    <div class="boot-dial" aria-hidden="true">
+      <svg viewBox="0 0 120 120"><circle class="boot-track" cx="60" cy="60" r="52"/><circle id="boot-arc" class="boot-arc" cx="60" cy="60" r="52" pathLength="100"/></svg>
+      <span id="boot-needle" class="boot-needle"></span>
+    </div>
+    <p class="boot-word">Tick Lock</p>
+    <p id="boot-step" class="boot-step">Loading the studio</p>
+    <p class="boot-pct"><span id="boot-pct">0</span></p>
+  </div>
+  <noscript><p class="boot-noscript">Tick Lock needs JavaScript and WebGL to run.</p></noscript>
   <div id="perf" hidden></div>
 
   <script type="module" src="src/main.js"></script>

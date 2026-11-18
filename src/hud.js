@@ -100,9 +100,9 @@ export function createHud(parts, maxAniso = 8) {
   function react(evt, d = {}) {
     if (evt === 'hit') energy = Math.min(1.6, energy + (d.perfect ? 1.0 : 0.6));
     if (evt === 'blue') card = { title: '+2s', sub: 'TIME BONUS', color: C.blue, t: 0, dur: 0.9 };
-    if (evt === 'recovery') card = { title: 'SAVED! +1.5s', sub: `COMBO ×${d.combo} RESCUED`, color: C.emerald, t: 0, dur: 1.1 };
+    if (evt === 'recovery') card = { title: 'SAVED! +1.2s', sub: `COMBO ×${d.combo} RESCUED`, color: C.emerald, t: 0, dur: 1.1 };
     if (evt === 'flow') card = { title: 'FLOW STATE', sub: 'SCORE ×1.25 ACTIVE', color: C.gold, t: 0, dur: 1.2 };
-    if (evt === 'graze') card = { title: 'SO CLOSE!', sub: `${d.deg}° ${d.timing} · −0.5s`, color: C.gold, t: 0, dur: 0.75 };
+    if (evt === 'graze') card = { title: 'SO CLOSE!', sub: `${d.deg}° ${d.timing} · −0.4s`, color: C.gold, t: 0, dur: 0.75 };
     if (evt === 'levelup') card = { title: `LEVEL ${d.level}`, sub: '+2s', color: C.gold, t: 0, dur: 1.3 };
     if (evt === 'miss') { glitchT = 0.3; energy = 0; }
     if (evt === 'fatal') { glitchT = 0.45; card = { title: 'LOCKED!', sub: d.text || 'TIME UP', color: C.red, t: 0, dur: 0.9 }; }
@@ -122,11 +122,11 @@ export function createHud(parts, maxAniso = 8) {
     const blink = Math.floor(clock * 2.2) % 2 === 0;
 
     if (s.mode === 'title') {
-      ctx.fillStyle = C.cream; ctx.font = `700 108px ${FONT}`;
-      spaced(ctx, 'TICK LOCK', R, 218, 0.06);
-      ctx.fillStyle = C.dim; ctx.font = `600 30px ${FONT}`;
-      spaced(ctx, `BEST  ${fmt(s.best)}`, R, 300);
-      if (blink) { ctx.fillStyle = C.magenta; ctx.font = `600 30px ${FONT}`; spaced(ctx, 'PRESS SPACE / TAP', R, 372); }
+      // The title lives once, in the screen corner; the label carries the number to beat.
+      ctx.fillStyle = C.dim; ctx.font = `600 46px ${FONT}`;
+      ctx.fillText('Best score', R, 184);
+      ctx.fillStyle = C.cream; ctx.font = `600 128px ${FONT}`;
+      ctx.fillText(fmt(s.best), R, 282);
     } else if (s.mode === 'over') {
       ctx.fillStyle = C.red; ctx.font = `700 88px ${FONT}`;
       spaced(ctx, 'LOCKED OUT', R, 192, 0.04);
@@ -138,7 +138,7 @@ export function createHud(parts, maxAniso = 8) {
       spaced(ctx, 'SCORE', R, 296);
       ctx.fillStyle = C.cream; ctx.font = `700 56px ${FONT}`;
       ctx.fillText(fmt(s.score), R, 340);
-      if (blink && s.retryReady) { ctx.fillStyle = C.magenta; ctx.font = `600 28px ${FONT}`; spaced(ctx, 'PRESS TO RETRY', R, 404); }
+      if (blink && s.retryReady) { ctx.fillStyle = C.magenta; ctx.font = `600 28px ${FONT}`; spaced(ctx, 'SPACE TO RETRY', R, 404); }
     } else {
       if (s.flow) {
         ctx.save();
@@ -200,8 +200,10 @@ export function createHud(parts, maxAniso = 8) {
     ctx.fillStyle = 'rgba(0,0,0,0.28)';
     for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
 
-    // top bar: REC + timecode + title
     ctx.textBaseline = 'middle';
+    if (s.mode === 'title') { drawBoard(ctx, W); mon.tex.needsUpdate = true; return; }
+
+    // top bar while recording: REC + timecode
     const recOn = s.mode === 'play' ? Math.floor(clock * 1.6) % 2 === 0 : true;
     ctx.fillStyle = recOn ? C.red : 'rgba(255,59,59,0.25)';
     ctx.beginPath(); ctx.arc(48, 46, 13, 0, Math.PI * 2); ctx.fill();
@@ -209,22 +211,9 @@ export function createHud(parts, maxAniso = 8) {
     ctx.fillText(s.mode === 'play' ? 'REC' : 'STBY', 72, 47);
     ctx.font = `600 30px ui-monospace, Consolas, monospace`; ctx.fillStyle = C.dim;
     ctx.fillText(timecode(s.runTime), 150, 47);
-    ctx.textAlign = 'right'; ctx.font = `800 28px ${FONT}`; ctx.fillStyle = C.gold;
-    ctx.fillText('TICK LOCK', W - 40, 47);
 
     ctx.textAlign = 'center';
-    if (s.mode === 'title') {
-      ctx.fillStyle = C.gold; ctx.font = `700 30px ${FONT}`;
-      spaced(ctx, 'MUASOOM STUDIO', W / 2, 165, 0.22);
-      ctx.fillStyle = C.cream; ctx.font = `900 120px ${FONT}`;
-      ctx.fillText('TICK LOCK', W / 2, 255);
-      ctx.fillStyle = C.blue; ctx.font = `700 30px ${FONT}`;
-      spaced(ctx, 'DEVELOPED BY LITT1ESTAR', W / 2, 336, 0.14);
-      if (Math.floor(clock * 2.2) % 2 === 0) {
-        ctx.fillStyle = C.magenta; ctx.font = `800 38px ${FONT}`;
-        ctx.fillText('PRESS SPACE / TAP TO PLAY', W / 2, 445);
-      }
-    } else if (s.mode === 'over') {
+    if (s.mode === 'over') {
       ctx.fillStyle = C.red; ctx.font = `900 92px ${FONT}`;
       ctx.fillText('LOCKED OUT', W / 2, 160);
       const rows = [['SCORE', fmt(s.score)], ['LEVEL', s.level], ['HITS', s.hits], ['PERFECT', s.perfects], ['BEST', fmt(s.best)]];
@@ -293,6 +282,35 @@ export function createHud(parts, maxAniso = 8) {
     mon.tex.needsUpdate = true;
   }
 
+  // ---------- monitor on the menu: today's top five, the reason to stay and play
+  let board = [];
+  function setBoard(rows) { board = rows.slice(0, 5); monAcc = 1; }
+  function drawBoard(ctx, W) {
+    const L = 84, Rx = W - 84;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = C.cream; ctx.font = `600 52px ${FONT}`;
+    ctx.fillText('Today’s top five', L, 92);
+    ctx.fillStyle = 'rgba(212,162,89,0.45)';
+    ctx.fillRect(L, 134, Rx - L, 2);
+    if (!board.length) {
+      ctx.fillStyle = C.dim; ctx.font = `600 44px ${FONT}`;
+      ctx.fillText('No scores yet. Set the first one.', L, 300);
+      return;
+    }
+    board.forEach((e, i) => {
+      const y = 196 + i * 78;
+      const first = i === 0;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = first ? C.gold : C.faint; ctx.font = `600 44px ${FONT}`;
+      ctx.fillText(String(i + 1), L, y);
+      ctx.fillStyle = first ? C.cream : C.dim; ctx.font = `600 ${first ? 52 : 46}px ${FONT}`;
+      ctx.fillText(String(e.name).slice(0, 14), L + 64, y);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = first ? C.gold : C.dim;
+      ctx.fillText(fmt(e.score), Rx, y);
+    });
+  }
+
   // Redraw the hub only when what it shows changes; the monitor animates at 30 Hz.
   let hubKey = '';
   let monAcc = 1;
@@ -312,5 +330,5 @@ export function createHud(parts, maxAniso = 8) {
     if (monAcc >= 1 / MONITOR_HZ) { drawMonitor(s, monAcc); monAcc = 0; }
   }
 
-  return { update, react };
+  return { update, react, setBoard };
 }

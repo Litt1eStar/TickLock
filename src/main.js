@@ -11,14 +11,54 @@ import { AVATARS, getAvatar } from './avatars.js';
 const $ = (id) => document.getElementById(id);
 const dom = { floats: $('floats'), flash: $('flash') };
 
+// ---------- boot screen: real progress for fonts (10%), studio.glb (70%), scene setup + shader compile (20%)
+const boot = (() => {
+  const el = $('boot'), arc = $('boot-arc'), needle = $('boot-needle'), pct = $('boot-pct'), step = $('boot-step');
+  let shown = 0;
+  return {
+    set(k, label) {
+      shown = Math.max(shown, Math.min(1, k));          // never runs backwards
+      arc.style.strokeDashoffset = String(100 - shown * 100);
+      needle.style.transform = `rotate(${shown * 360}deg)`;
+      pct.textContent = String(Math.round(shown * 100));
+      if (label && step.textContent !== label) step.textContent = label;
+    },
+    fail() {
+      el.classList.add('is-failed');
+      step.textContent = 'The studio could not load. Refresh the page to try again.';
+    },
+    finish(onGone) {
+      el.classList.add('is-done');
+      let gone = false;
+      const end = () => { if (gone) return; gone = true; el.remove(); onGone(); };
+      el.addEventListener('transitionend', (e) => { if (e.target === el) end(); });
+      setTimeout(end, 900);                               // reduced motion has no transition to wait for
+    },
+  };
+})();
+
+boot.set(0.02, 'Loading fonts');
 // canvas text needs the vendored font loaded before the first hub/monitor draw
 await Promise.all(['500', '600', '700'].map((w) => document.fonts.load(`${w} 40px "Barlow Condensed"`))).catch(() => {});
-const stage = await createStage($('stage'));
+boot.set(0.1, 'Loading the studio');
+let stage;
+try {
+  stage = await createStage($('stage'), (k) => boot.set(0.1 + k * 0.7, 'Loading the studio'));
+} catch (err) {
+  boot.fail();
+  throw err;
+}
+boot.set(0.82, 'Setting the lights');
 const dial = createDial(stage);
 stage.dial = dial;
 const hud = createHud(stage.parts, stage.renderer.capabilities.getMaxAnisotropy());
 const fx = createFx(stage, dom);
 const audio = createAudio();
+// Compile every shader now, behind the boot screen, so the first menu frame doesn't hitch or flash black.
+boot.set(0.9, 'Warming up the lights');
+await stage.renderer.compileAsync(stage.scene, stage.camera).catch(() => {});
+boot.set(1, 'Ready');
+let booted = false;
 
 const emit = (evt, data) => {
   fx.react(evt, data);
@@ -35,7 +75,6 @@ const pause3d = createPauseMenu(stage, (action) => {
   else if (action === 'menu') { setPaused(false); demo.toTitle(); }
 });
 const perf = { frames: 0, acc: 0, avgMs: 0, pixelRatio: stage.renderer.getPixelRatio() };
-$('loading').remove();
 
 // ---------- Top-10 Arcade Leaderboard & Booth Time-Per-Score Log
 const LB_KEY = 'ticklock_leaderboard';
@@ -90,15 +129,8 @@ function syncLeaderboardUI() {
     try { localStorage.setItem('ticklock_best', String(topScore)); } catch {}
   }
 
-  // Title screen compact Top-3 record strip
-  const sideList = $('title-lb-list');
-  if (board.length === 0) {
-    sideList.innerHTML = '<li><span class="rk">--</span><span class="nm">NO RECORDS TODAY</span><span class="sc">0</span></li>';
-  } else {
-    sideList.innerHTML = board.slice(0, 3).map((e, i) => (
-      `<li><span class="rk">0${i + 1}</span><span class="nm">${escHtml(e.name)}</span><span class="sc">${fmtScore(e.score)}</span></li>`
-    )).join('');
-  }
+  // The studio monitor shows today's top five on the menu
+  hud.setBoard(board);
 
   // Studio Ranking: Olympic Hanging Podium (#2 Left, #1 Center, #3 Right) + Ranked List + Pinned Current Player
   const podium = $('lb-podium');
@@ -106,7 +138,7 @@ function syncLeaderboardUI() {
   const selfBar = $('lb-self');
   if (board.length === 0) {
     podium.innerHTML = '';
-    tracks.innerHTML = '<li class="lb-empty">NO SCORES RECORDED TODAY · BE THE FIRST TO SET A RECORD</li>';
+    tracks.innerHTML = '<li class="lb-empty">No scores yet today. Set the first one.</li>';
     selfBar.hidden = true;
   } else {
     const order = [1, 0, 2]; // #2 Left, #1 Center, #3 Right
@@ -116,19 +148,17 @@ function syncLeaderboardUI() {
       const rank = idx + 1;
       const av = getAvatar(e.avatar || idx);
       return `<div class="pod-banner rank-${rank}">
-        <span class="pod-crown">RANK #${rank}</span>
+        <span class="pod-crown">#${rank}</span>
         <div class="pod-avatar-wrap">${av.svg}</div>
         <span class="pod-name">${escHtml(e.name)}</span>
         <span class="pod-score">${fmtScore(e.score)}</span>
-        <span class="pod-meta">LV ${e.level || 1} · ×${e.maxCombo || 0}</span>
+        <span class="pod-meta">Level ${e.level || 1}</span>
       </div>`;
     }).join('');
 
     tracks.innerHTML = board.map((e, idx) => {
       const rank = idx + 1;
       const av = getAvatar(e.avatar || idx);
-      const timeMeta = e.timeLabel ? `${e.timeLabel} · ` : '';
-      const durMeta = e.runTime ? `${Number(e.runTime).toFixed(1)}s` : `${e.perfects || 0}P`;
       return `<li class="lb-track${rank === 1 ? ' top-1' : ''}">
         <span class="trk-rk">${rank}</span>
         <div class="lb-av">${av.svg}</div>
@@ -137,8 +167,8 @@ function syncLeaderboardUI() {
           <span class="trk-sc">${fmtScore(e.score)}</span>
         </div>
         <div class="trk-right">
-          <span class="trk-lv">LV ${e.level || 1} · ${durMeta}</span>
-          <span class="trk-sub">${timeMeta}×${e.maxCombo || 0} · ${e.perfects || 0} PERF</span>
+          <span class="trk-lv">Level ${e.level || 1}</span>
+          <span class="trk-sub">Combo ×${e.maxCombo || 0}</span>
         </div>
       </li>`;
     }).join('');
@@ -154,8 +184,8 @@ function syncLeaderboardUI() {
           <span class="trk-sc">${fmtScore(lastRun.score)}</span>
         </div>
         <div class="trk-right">
-          <span class="trk-lv">LV ${lastRun.level}</span>
-          <span class="trk-sub">YOUR RUN</span>
+          <span class="trk-lv">Level ${lastRun.level}</span>
+          <span class="trk-sub">Your run</span>
         </div>`;
     } else {
       selfBar.hidden = true;
@@ -199,6 +229,8 @@ function commitRunScore(explicitName = '') {
 }
 
 function onGameEvent(evt, d = {}) {
+  if (evt === 'start') phase = 'run';
+  if (evt === 'title') { phase = 'menu'; setRailFocus(0); }
   if (evt === 'start' || evt === 'title') {
     // Auto-record previous run if visitor hit Retry / Main Menu without clicking Save
     if (!scoreSavedThisRun && pendingRun && pendingRun.score > 0) {
@@ -223,15 +255,15 @@ function onGameEvent(evt, d = {}) {
     $('go-combo').textContent = `×${d.maxCombo || d.combo || 0}`;
     $('go-hits').textContent = String(d.hits || 0);
     $('go-perf').textContent = String(d.perfects || 0);
-    $('go-reason-val').textContent = d.fatalText || 'TIME UP';
+    $('go-reason-val').textContent = d.fatalText || 'Time up';
 
     const rank = board.filter((b) => b.score > sc).length + 1;
     const tag = $('go-rank-tag');
     if (sc > 0 && rank <= 10) {
-      tag.textContent = `NEW #${rank} RECORD // SIGNAL LOST`;
+      tag.textContent = `New #${rank} on today\u2019s board`;
       tag.classList.add('high');
     } else {
-      tag.textContent = 'SIGNAL LOST // LOCKED OUT';
+      tag.textContent = 'Locked out';
       tag.classList.remove('high');
     }
 
@@ -252,7 +284,7 @@ function onGameEvent(evt, d = {}) {
       avatar: selectedAvatar,
     } : null;
     syncLeaderboardUI();
-    $('player-name').placeholder = `PLAYER #${runSeq + 1} (OPTIONAL)`;
+    $('player-name').placeholder = `Player #${runSeq + 1}`;
     $('score-form').hidden = !canSave;
     $('avatar-picker').hidden = !canSave;
     $('score-form').querySelector('.sf-row').hidden = false;
@@ -280,39 +312,119 @@ function openModal(id, show = true) {
     setPaused(demo.togglePause());
   }
 }
-const anyModalOpen = () => !$('tutorial-modal').hidden || !$('leaderboard-modal').hidden;
 
-$('btn-howto').addEventListener('click', () => openModal('tutorial-modal', $('tutorial-modal').hidden));
-$('tut-close').addEventListener('click', () => openModal('tutorial-modal', false));
-$('tut-play').addEventListener('click', () => {
+// ---------- Menu flow: Play -> How to play -> "Press Space to start" -> run
+// phase: 'menu' (title rail), 'brief' (tutorial open from Play), 'ready' (cue shown), 'run' (a game is on)
+let phase = 'menu';
+let briefOpenedAt = 0;
+const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+function beginBrief() {
+  phase = 'brief';
+  openModal('tutorial-modal', true);
+  briefOpenedAt = performance.now();
+  $('tut-play').focus();
+}
+// Closing the briefing, by any route, leads to the start cue. During a run, H re-opens it as a reference.
+function closeTutorial({ resume = false } = {}) {
+  if ($('tutorial-modal').hidden) return;
   openModal('tutorial-modal', false);
-  audio.unlock();
-  if (demo.state.mode !== 'play') demo.start();
-  else if (demo.state.paused) setPaused(demo.togglePause());
-});
-$('tutorial-modal').addEventListener('click', (e) => { if (e.target === $('tutorial-modal')) openModal('tutorial-modal', false); });
+  if (phase === 'brief') { showReady(); return; }
+  if (resume && demo.state.mode === 'play' && demo.state.paused) setPaused(demo.togglePause());
+}
 
-$('btn-lb').addEventListener('click', () => openModal('leaderboard-modal', $('leaderboard-modal').hidden));
-$('btn-open-lb-side').addEventListener('click', () => openModal('leaderboard-modal', true));
-$('btn-go-lb').addEventListener('click', () => openModal('leaderboard-modal', true));
-$('lb-close').addEventListener('click', () => openModal('leaderboard-modal', false));
-$('lb-close-btn').addEventListener('click', () => openModal('leaderboard-modal', false));
-$('leaderboard-modal').addEventListener('click', (e) => { if (e.target === $('leaderboard-modal')) openModal('leaderboard-modal', false); });
+// The cue: each glyph gets an index so the needle can wipe it away left to right.
+const cue = $('ready-cue');
+const cueLine = cue.querySelector('.cue-line');
+let cueChars = 0;
+for (const part of cueLine.children) {
+  if (part.classList.contains('cue-key')) { part.style.setProperty('--i', cueChars++); continue; }
+  const text = part.textContent;
+  part.textContent = '';
+  part.setAttribute('aria-label', text);
+  for (const ch of text) {
+    const span = document.createElement('span');
+    span.className = 'cue-ch';
+    span.setAttribute('aria-hidden', 'true');
+    span.textContent = ch;
+    span.style.setProperty('--i', cueChars++);
+    part.appendChild(span);
+  }
+}
+cue.style.setProperty('--n', cueChars);
+let cueLeaving = false;
+let cueTimer = 0;
+
+function showReady() {
+  phase = 'ready';
+  clearTimeout(cueTimer);
+  cueLeaving = false;
+  cue.classList.remove('is-leaving');
+  cue.hidden = false;
+  document.activeElement?.blur?.();
+}
+function hideCue(animated) {
+  clearTimeout(cueTimer);
+  if (!animated || REDUCED_MOTION.matches) {
+    cue.classList.add('is-leaving');
+    cueTimer = setTimeout(() => { cue.hidden = true; cue.classList.remove('is-leaving'); cueLeaving = false; }, REDUCED_MOTION.matches ? 160 : 0);
+    cueLeaving = REDUCED_MOTION.matches;
+    return;
+  }
+  cueLeaving = true;
+  cue.classList.add('is-leaving');
+  cueTimer = setTimeout(() => { cue.hidden = true; cue.classList.remove('is-leaving'); cueLeaving = false; }, 760);
+}
+function go() {
+  if (phase !== 'ready') return;
+  audio.unlock();
+  phase = 'run';
+  hideCue(true);
+  demo.start();
+}
+function toMenu() {
+  hideCue(false);
+  if (demo.state.mode !== 'title') demo.toTitle();
+  phase = 'menu';
+  setRailFocus(0);
+}
+
+function openLeaderboard() {
+  openModal('leaderboard-modal', true);
+  $('lb-close-btn').focus();
+}
+function closeLeaderboard() {
+  openModal('leaderboard-modal', false);
+  if (demo.state.mode === 'title') document.activeElement?.blur?.();
+}
+
+$('tut-close').addEventListener('click', () => closeTutorial());
+$('tut-play').addEventListener('click', () => {
+  if (performance.now() - briefOpenedAt < 250) return;     // the key that opened it must not also close it
+  closeTutorial({ resume: true });
+});
+$('tutorial-modal').addEventListener('click', (e) => { if (e.target === $('tutorial-modal')) closeTutorial(); });
+
+$('btn-lb').addEventListener('click', openLeaderboard);
+$('btn-go-lb').addEventListener('click', openLeaderboard);
+$('lb-close').addEventListener('click', closeLeaderboard);
+$('lb-close-btn').addEventListener('click', closeLeaderboard);
+$('leaderboard-modal').addEventListener('click', (e) => { if (e.target === $('leaderboard-modal')) closeLeaderboard(); });
 
 let resetConfirmTimer = null;
 $('lb-reset').addEventListener('click', () => {
   const btn = $('lb-reset');
   if (!resetConfirmTimer) {
-    btn.textContent = 'CLICK AGAIN TO CONFIRM RESET';
+    btn.textContent = 'Press again to clear';
     resetConfirmTimer = setTimeout(() => {
       resetConfirmTimer = null;
-      btn.textContent = "RESET DAY'S SCORES (BOOTH)";
+      btn.textContent = 'Clear today\u2019s scores';
     }, 3000);
     return;
   }
   clearTimeout(resetConfirmTimer);
   resetConfirmTimer = null;
-  btn.textContent = "RESET DAY'S SCORES (BOOTH)";
+  btn.textContent = 'Clear today\u2019s scores';
   board = [];
   runLog = [];
   runSeq = 0;
@@ -349,19 +461,26 @@ $('lb-export').addEventListener('click', () => {
   URL.revokeObjectURL(a.href);
 });
 
-$('btn-start-main').addEventListener('click', () => { audio.unlock(); demo.start(); });
-$('btn-menu-settings').addEventListener('click', toggleSettings);
+$('btn-start-main').addEventListener('click', () => { audio.unlock(); beginBrief(); });
+$('btn-menu-settings').addEventListener('click', () => { toggleSettings(); if (!$('settings-panel').hidden) $('sp-preset').focus(); });
 $('btn-retry').addEventListener('click', () => { audio.unlock(); demo.start(); });
-$('btn-go-title').addEventListener('click', () => { audio.unlock(); demo.toTitle(); });
+$('btn-go-title').addEventListener('click', () => { audio.unlock(); toMenu(); });
 
-// Left-Rail Menu navigation (ArrowUp/ArrowDown/W/S + mouse hover focus sync)
+// Menu navigation (ArrowUp/ArrowDown/W/S, with hover and Tab focus kept in sync)
 const railBtns = [...document.querySelectorAll('#menu-rail .rail-btn')];
 let railIndex = 0;
 function setRailFocus(idx) {
   railIndex = (idx + railBtns.length) % railBtns.length;
-  railBtns.forEach((b, i) => b.classList.toggle('active', i === railIndex));
+  railBtns.forEach((b, i) => {
+    b.classList.toggle('active', i === railIndex);
+    if (i === railIndex) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
+  });
 }
-railBtns.forEach((b, i) => b.addEventListener('pointerenter', () => setRailFocus(i)));
+setRailFocus(0);
+railBtns.forEach((b, i) => {
+  b.addEventListener('pointerenter', () => setRailFocus(i));
+  b.addEventListener('focus', () => setRailFocus(i));
+});
 
 // ---------- visual & performance settings panel
 const SETTINGS_KEY = 'ticklock_settings';
@@ -403,6 +522,7 @@ function toggleSettings() {
   const panel = $('settings-panel');
   panel.hidden = !panel.hidden;
   $('btn-settings').classList.toggle('on', !panel.hidden);
+  if (panel.hidden && panel.contains(document.activeElement)) document.activeElement.blur();
 }
 $('btn-settings').addEventListener('click', toggleSettings);
 $('sp-close').addEventListener('click', toggleSettings);
@@ -431,36 +551,52 @@ const syncBoost = () => {
   $('btn-boost').classList.toggle('on', input.boost);
 };
 
+const isGo = (e) => e.code === 'Space' || e.code === 'Enter';
 window.addEventListener('keydown', (e) => {
-  if (e.repeat) return;
+  if (!booted || e.repeat) return;
   // Don't hijack keys while the player is typing their name on the Game Over leaderboard form
   if (document.activeElement === $('player-name')) {
     if (e.code === 'Escape') $('player-name').blur();
     return;
   }
   audio.unlock();
+  const settings = $('settings-panel');
+  const tut = $('tutorial-modal');
+  const lb = $('leaderboard-modal');
   if (e.code === 'Escape') {
-    if (anyModalOpen()) {
-      openModal('tutorial-modal', false);
-      openModal('leaderboard-modal', false);
-      return;
-    }
+    if (!settings.hidden) { toggleSettings(); return; }
+    if (!tut.hidden) { closeTutorial(); return; }
+    if (!lb.hidden) { closeLeaderboard(); return; }
+    if (phase === 'ready') { toMenu(); return; }
     setPaused(demo.togglePause());
     return;
   }
-  if (anyModalOpen()) {
-    if (e.code === 'KeyH') openModal('tutorial-modal', false);
-    if (e.code === 'KeyL') openModal('leaderboard-modal', false);
+  // Settings controls keep their native keys (arrows move sliders, Space toggles the checkbox)
+  if (!settings.hidden && settings.contains(document.activeElement)) return;
+  if (!tut.hidden) {
+    if (isGo(e)) {
+      e.preventDefault();
+      if (performance.now() - briefOpenedAt > 250) closeTutorial({ resume: true });
+    } else if (e.code === 'KeyH') closeTutorial();
+    return;
+  }
+  if (!lb.hidden) {
+    // a focused button inside the board (Close, Export, Clear) handles its own key
+    if (e.code === 'KeyL' || (isGo(e) && !lb.contains(document.activeElement))) { e.preventDefault(); closeLeaderboard(); }
     return;
   }
   if (demo.state.mode === 'title') {
-    if (e.code === 'ArrowDown' || e.code === 'KeyS') { e.preventDefault(); setRailFocus(railIndex + 1); return; }
-    if (e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); setRailFocus(railIndex - 1); return; }
-    if (e.code === 'Enter' || e.code === 'Space') {
-      e.preventDefault();
-      railBtns[railIndex]?.click();
+    if (phase === 'ready') {
+      if (isGo(e)) { e.preventDefault(); go(); }
       return;
     }
+    if (e.code === 'ArrowDown' || e.code === 'KeyS') { e.preventDefault(); setRailFocus(railIndex + 1); return; }
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); setRailFocus(railIndex - 1); return; }
+    if (isGo(e)) { e.preventDefault(); railBtns[railIndex]?.click(); return; }
+    if (e.code === 'KeyL') { openLeaderboard(); return; }
+    if (e.code === 'KeyG') { $('btn-menu-settings').click(); return; }
+    if (e.code === 'KeyF') { $('perf').hidden = !$('perf').hidden; return; }
+    return;
   }
   if (demo.state.mode === 'play' && demo.state.paused) {
     if (e.code === 'ArrowDown' || e.code === 'KeyS') { e.preventDefault(); pause3d.moveSelection(1); return; }
@@ -476,8 +612,8 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); demo.pick(); }
   else if (e.key === 'Shift') { input.keyBoost = true; syncBoost(); }
   else if (e.code === 'KeyP') setPaused(demo.togglePause());
-  else if (e.code === 'KeyH') openModal('tutorial-modal', $('tutorial-modal').hidden);
-  else if (e.code === 'KeyL') openModal('leaderboard-modal', $('leaderboard-modal').hidden);
+  else if (e.code === 'KeyH') { openModal('tutorial-modal', true); $('tut-play').focus(); }
+  else if (e.code === 'KeyL') openLeaderboard();
   else if (e.code === 'KeyF') $('perf').hidden = !$('perf').hidden;
   else if (e.code === 'KeyG') toggleSettings();
   else if (/^[0-7]$/.test(e.key)) demo.debugKey(e.key);
@@ -491,13 +627,23 @@ stage.renderer.domElement.addEventListener('pointerdown', (e) => {
     pause3d.onPointerDown(e.clientX, e.clientY);
     return;
   }
-  demo.pick();
+  primaryPress();
 });
 $('btn-pick').addEventListener('pointerdown', (e) => { e.preventDefault(); audio.unlock(); demo.pick(); });
 const boostBtn = $('btn-boost');
 boostBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); boostBtn.setPointerCapture(e.pointerId); input.btnBoost = true; syncBoost(); });
 for (const t of ['pointerup', 'pointercancel']) boostBtn.addEventListener(t, () => { input.btnBoost = false; syncBoost(); });
 $('btn-pause').addEventListener('click', () => setPaused(demo.togglePause()));
+
+// One "go" action for the canvas and the gamepad, routed through the menu flow on the title screen.
+function primaryPress() {
+  if (!booted) return;
+  if (demo.state.mode !== 'title') { demo.pick(); return; }
+  if (phase === 'ready') go();
+  else if (phase === 'brief') closeTutorial();
+  else if (phase === 'menu' && !anyOverlayOpen()) beginBrief();
+}
+const anyOverlayOpen = () => !$('tutorial-modal').hidden || !$('leaderboard-modal').hidden || !$('settings-panel').hidden;
 
 function setPaused(p) {
   document.body.dataset.paused = p ? 'true' : 'false';
@@ -519,7 +665,7 @@ function pollPad() {
   const pad = [...(navigator.getGamepads?.() || [])].find(Boolean);
   if (!pad) return;
   const a = pad.buttons[0]?.pressed;
-  if (a && !padA) demo.pick();
+  if (a && !padA) primaryPress();
   padA = a;
   const b = !!(pad.buttons[5]?.pressed || pad.buttons[7]?.pressed);
   if (b !== input.padBoost) { input.padBoost = b; syncBoost(); }
@@ -567,16 +713,17 @@ function frame(now) {
   // Contextual visibility for Title UI, Mode Attribute & Tutorial Banner
   document.body.dataset.mode = s.mode;
   document.body.dataset.paused = s.paused ? 'true' : 'false';
-  $('title-ui').hidden = s.mode !== 'title';
+  const menuUp = booted && s.mode === 'title' && phase === 'menu';
+  if ($('title-ui').hidden === menuUp) $('title-ui').hidden = !menuUp;
   const banner = $('tutorial-banner');
-  if (s.mode === 'play' && !s.paused) {
+  if (s.mode === 'play' && !s.paused && !cueLeaving) {
     if (!s.clockStarted) {
       banner.hidden = false;
-      const html = 'HIT THE <strong>GOLD ZONE</strong> TO START THE 30s CLOCK · <strong>[SPACE / TAP]</strong>';
+      const html = 'Hit a <strong>gold zone</strong> to start the 30-second clock';
       if (banner.innerHTML !== html) banner.innerHTML = html;
     } else if (s.hits < 3) {
       banner.hidden = false;
-      const html = 'AIM FOR <strong>WHITE CORE</strong> FOR PERFECT (×2) · HOLD <strong>[SHIFT]</strong> TO BOOST';
+      const html = 'Hit the white centre for a <strong>perfect</strong>. Hold <strong>Shift</strong> to boost.';
       if (banner.innerHTML !== html) banner.innerHTML = html;
     } else {
       banner.hidden = true;
@@ -592,6 +739,12 @@ function frame(now) {
     $('perf').textContent = `${(1000 / perf.avgMs).toFixed(0)} fps · ${perf.avgMs.toFixed(1)} ms · px ${perf.pixelRatio.toFixed(2)}`;
     perf.frames = 0; perf.acc = 0;
   }
+  if (!booted && !bootHandoff) {
+    // the first lit frame is on screen: fade the boot screen away, then let the menu in
+    bootHandoff = true;
+    boot.finish(() => { booted = true; });
+  }
   requestAnimationFrame(frame);
 }
+let bootHandoff = false;
 requestAnimationFrame(frame);

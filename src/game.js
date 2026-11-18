@@ -295,7 +295,7 @@ export function createGame(emit) {
       s.time -= dt;
       if (s.time <= 0) {
         const info = findNearestMiss();
-        return triggerFatal(`TIME UP · ${info.deg}° AWAY`);
+        return triggerFatal(`TIME UP, ${info.deg}° AWAY`);
       }
     }
 

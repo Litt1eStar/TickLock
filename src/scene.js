@@ -76,7 +76,8 @@ const RENDER_SCALE = FAST ? 0.7 : 0.9;
 const MAX_BUFFER_W = FAST ? 1280 : 1536; // cap total buffer width on 1440p/4K displays for 120+ fps on Intel UHD
 const MIN_HALF_WIDTH = 1.85;
 
-export async function createStage(container) {
+// onProgress(0..1) reports the studio.glb download for the boot screen.
+export async function createStage(container, onProgress = () => {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
   const MAX_PIXEL_RATIO = Math.min(Math.max(window.devicePixelRatio, 1), 1.15) * RENDER_SCALE;
   renderer.setPixelRatio(MAX_PIXEL_RATIO);
@@ -112,7 +113,11 @@ export async function createStage(container) {
   lights.rim.position.set(-2.4, 3.0, 2.4);
 
   // ---- studio model
-  const gltf = await new GLTFLoader().loadAsync('assets/studio.glb');
+  const GLB_BYTES_FALLBACK = 6.9e6;   // used when the server sends no Content-Length
+  const gltf = await new GLTFLoader().loadAsync('assets/studio.glb', (e) => {
+    onProgress(Math.min(1, e.loaded / (e.total || GLB_BYTES_FALLBACK)));
+  });
+  onProgress(1);
   scene.add(gltf.scene);
   const parts = {};
   gltf.scene.traverse((o) => { if (o.name) parts[o.name] = o; });
@@ -264,6 +269,7 @@ export async function createStage(container) {
 
   return {
     renderer, scene, camera, composer, bloom, glitch, grade, lights, parts, rig,
+    halos: { lamp: lampHalo, sign: signHalo },
     visuals, applyVisuals, render, resize, setPixelRatio,
     maxPixelRatio: MAX_PIXEL_RATIO,
   };

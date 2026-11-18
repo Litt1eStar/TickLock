@@ -47,16 +47,17 @@ function particleBuffers(n) {
     vel: new Float32Array(n * 3), life: new Float32Array(n), maxLife: new Float32Array(n), geo,
   };
   for (let i = 0; i < n; i++) b.seed[i] = Math.random();
-  geo.setAttribute('position', new THREE.BufferAttribute(b.pos, 3));
-  geo.setAttribute('color', new THREE.BufferAttribute(b.col, 3));
-  geo.setAttribute('size', new THREE.BufferAttribute(b.size, 1));
+  const dynAttr = (arr, itemSize) => new THREE.BufferAttribute(arr, itemSize).setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute('position', dynAttr(b.pos, 3));
+  geo.setAttribute('color', dynAttr(b.col, 3));
+  geo.setAttribute('size', dynAttr(b.size, 1));
   geo.setAttribute('seed', new THREE.BufferAttribute(b.seed, 1));
-  geo.setAttribute('alpha', new THREE.BufferAttribute(b.alpha, 1));
+  geo.setAttribute('alpha', dynAttr(b.alpha, 1));
   return b;
 }
 
 export function createFx(stage, dom) {
-  const { scene, camera, parts, lights, grade, rig, renderer } = stage;
+  const { scene, camera, parts, lights, grade, rig, renderer, viewport } = stage;
   const pMat = makeParticleMaterial();
 
   // ---------- event particles + needle sparkles
@@ -109,16 +110,30 @@ export function createFx(stage, dom) {
 
   function updateParticles(dt) {
     const drag = Math.exp(-dt * 2.2);
+    let maxAlive = -1;
     for (let i = 0; i < MAX_PARTICLES; i++) {
-      if (P.life[i] <= 0) { P.alpha[i] = 0; continue; }
-      P.life[i] -= dt;
-      for (let j = 0; j < 3; j++) {
-        P.vel[i * 3 + j] *= drag;
-        P.pos[i * 3 + j] += P.vel[i * 3 + j] * dt;
+      if (P.life[i] <= 0) {
+        if (P.alpha[i] !== 0) P.alpha[i] = 0;
+        continue;
       }
+      P.life[i] -= dt;
+      if (P.life[i] <= 0) {
+        P.alpha[i] = 0;
+        continue;
+      }
+      maxAlive = i;
+      const idx = i * 3;
+      P.vel[idx] *= drag;
+      P.vel[idx + 1] *= drag;
+      P.vel[idx + 2] *= drag;
+      P.pos[idx] += P.vel[idx] * dt;
+      P.pos[idx + 1] += P.vel[idx + 1] * dt;
+      P.pos[idx + 2] += P.vel[idx + 2] * dt;
       const t = P.life[i] / P.maxLife[i];                 // 1 -> 0
       P.alpha[i] = Math.max(0, Math.min(1, t * 1.6)) * Math.min(1, (1 - t) * 8);
     }
+    P.geo.setDrawRange(0, maxAlive + 1);
+    if (maxAlive < 0 && !pDirty) return;
     P.geo.attributes.position.needsUpdate = true;
     P.geo.attributes.alpha.needsUpdate = true;
     if (pDirty) {
@@ -152,18 +167,37 @@ export function createFx(stage, dom) {
     D.geo.attributes.position.needsUpdate = true;
   }
 
-  // ---------- floating text (DOM, projected from the dial)
+  // ---------- floating text (pooled DOM nodes, projected from the dial, zero GC/reflow)
   const tmp = new THREE.Vector3();
+  const FLOAT_POOL = Array.from({ length: 16 }, () => {
+    const el = document.createElement('div');
+    el.className = 'float';
+    el.style.display = 'none';
+    dom.floats.appendChild(el);
+    return el;
+  });
+  let floatCursor = 0;
+  const FLOAT_FRAMES = [
+    { opacity: 0, transform: 'translate(-50%, -30%) scale(0.6)' },
+    { opacity: 1, transform: 'translate(-50%, -60%) scale(1.15)', offset: 0.12 },
+    { opacity: 1, transform: 'translate(-50%, -70%) scale(1)', offset: 0.25 },
+    { opacity: 1, transform: 'translate(-50%, -110%) scale(1)', offset: 0.65 },
+    { opacity: 0, transform: 'translate(-50%, -150%) scale(1)' },
+  ];
   function floatText(text, angle, radius, color, big = false) {
     dialPoint(angle, radius, 0.2, tmp).project(camera);
-    const el = document.createElement('div');
+    const el = FLOAT_POOL[floatCursor];
+    floatCursor = (floatCursor + 1) % FLOAT_POOL.length;
     el.className = big ? 'float big' : 'float';
     el.textContent = text;
     el.style.color = color;
-    el.style.left = `${(tmp.x * 0.5 + 0.5) * window.innerWidth}px`;
-    el.style.top = `${(-tmp.y * 0.5 + 0.5) * window.innerHeight}px`;
-    dom.floats.appendChild(el);
-    el.addEventListener('animationend', () => el.remove());
+    el.style.left = `${(tmp.x * 0.5 + 0.5) * viewport.w}px`;
+    el.style.top = `${(-tmp.y * 0.5 + 0.5) * viewport.h}px`;
+    el.style.display = '';
+    if (el._anim) el._anim.cancel();
+    const anim = el.animate(FLOAT_FRAMES, { duration: big ? 1200 : 900, easing: 'linear', fill: 'forwards' });
+    el._anim = anim;
+    anim.onfinish = () => { if (el._anim === anim) el.style.display = 'none'; };
   }
 
   // ---------- studio parts (practicals are optional)
@@ -231,7 +265,7 @@ export function createFx(stage, dom) {
         if (d.perfect) {
           floatText('Perfect', d.angle, 1.42, '#fff1d6', true);
           st.camFlash = 1; st.white = 1; st.punch = 1;
-          dom.flash.classList.remove('pop'); void dom.flash.offsetWidth; dom.flash.classList.add('pop');
+          if (!REDUCED_MOTION) dom.flash.animate([{ opacity: 0.22 }, { opacity: 0 }], { duration: 220, easing: 'ease-out' });
         }
         st.swell = 1; st.pump = 1; st.softHit = 1; st.softColor.set(c);
         break;

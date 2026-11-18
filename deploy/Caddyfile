@@ -1,6 +1,6 @@
-# Replace ticklock.example.com with your VPS domain name.
+# Reverse proxy for Tick Lock 3D at ticklock.cmm.works.
 # Caddy automatically provisions HTTPS certificates via Let's Encrypt.
-ticklock.example.com {
+ticklock.cmm.works {
   encode zstd gzip
   reverse_proxy 127.0.0.1:8642
 }

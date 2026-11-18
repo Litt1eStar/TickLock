@@ -40,7 +40,7 @@ const boot = (() => {
 
 boot.set(0.02, 'Loading fonts');
 // canvas text needs the vendored font loaded before the first hub/monitor draw
-await Promise.all(['500', '600', '700'].map((w) => document.fonts.load(`${w} 40px "Barlow Condensed"`))).catch(() => {});
+await Promise.all(['500', '600', '700'].map((w) => document.fonts.load(`${w} 40px "Barlow Condensed"`))).catch(() => { });
 boot.set(0.1, 'Loading the studio');
 let stage;
 try {
@@ -57,7 +57,7 @@ const fx = createFx(stage, dom);
 const audio = createAudio();
 // Compile every shader now, behind the boot screen, so the first menu frame doesn't hitch or flash black.
 boot.set(0.9, 'Warming up the lights');
-await stage.renderer.compileAsync(stage.scene, stage.camera).catch(() => {});
+await stage.renderer.compileAsync(stage.scene, stage.camera).catch(() => { });
 boot.set(1, 'Ready');
 let booted = false;
 
@@ -84,13 +84,13 @@ const RUN_SEQ_KEY = 'ticklock_run_seq';
 const LB_DATE_KEY = 'ticklock_lb_date';
 const todayKey = () => new Date().toLocaleDateString('en-CA');
 const SEED_BOARD = [
-  { name: 'LITT1ESTAR', score: 14800, level: 7, maxCombo: 18, perfects: 12, avatar: 'ace',      timeLabel: '10:15', runTime: 54.2 },
-  { name: 'MUASOOM',    score: 9600,  level: 5, maxCombo: 12, perfects: 8,  avatar: 'vinyl',    timeLabel: '10:08', runTime: 41.8 },
-  { name: 'AGENT-01',   score: 6400,  level: 4, maxCombo: 9,  perfects: 5,  avatar: 'operator', timeLabel: '09:55', runTime: 34.5 },
-  { name: 'KMUTT-CMM',  score: 5200,  level: 4, maxCombo: 7,  perfects: 4,  avatar: 'camera',   timeLabel: '09:42', runTime: 31.0 },
-  { name: 'VINYL-77',   score: 3900,  level: 3, maxCombo: 6,  perfects: 3,  avatar: 'synth',    timeLabel: '09:30', runTime: 26.4 },
-  { name: 'NIGHT-OWL',  score: 2650,  level: 2, maxCombo: 4,  perfects: 2,  avatar: 'onair',    timeLabel: '09:18', runTime: 22.1 },
-  { name: 'VISITOR',    score: 1400,  level: 2, maxCombo: 3,  perfects: 1,  avatar: 'padlock',  timeLabel: '09:05', runTime: 16.7 },
+  { name: 'LITT1ESTAR', score: 14800, level: 7, maxCombo: 18, perfects: 12, avatar: 'ace', timeLabel: '10:15', runTime: 54.2 },
+  { name: 'MUASOOM', score: 9600, level: 5, maxCombo: 12, perfects: 8, avatar: 'vinyl', timeLabel: '10:08', runTime: 41.8 },
+  { name: 'AGENT-01', score: 6400, level: 4, maxCombo: 9, perfects: 5, avatar: 'operator', timeLabel: '09:55', runTime: 34.5 },
+  { name: 'KMUTT-CMM', score: 5200, level: 4, maxCombo: 7, perfects: 4, avatar: 'camera', timeLabel: '09:42', runTime: 31.0 },
+  { name: 'VINYL-77', score: 3900, level: 3, maxCombo: 6, perfects: 3, avatar: 'synth', timeLabel: '09:30', runTime: 26.4 },
+  { name: 'NIGHT-OWL', score: 2650, level: 2, maxCombo: 4, perfects: 2, avatar: 'onair', timeLabel: '09:18', runTime: 22.1 },
+  { name: 'VISITOR', score: 1400, level: 2, maxCombo: 3, perfects: 1, avatar: 'padlock', timeLabel: '09:05', runTime: 16.7 },
 ];
 const today = todayKey();
 let rolledOver = false;
@@ -106,7 +106,7 @@ try {
   } else if (!savedDate) {
     localStorage.setItem(LB_DATE_KEY, today);
   }
-} catch {}
+} catch { }
 let selectedAvatar = AVATARS[0].id;
 let lastRun = null;
 let runSeq = Number(localStorage.getItem(RUN_SEQ_KEY) || 0);
@@ -114,7 +114,7 @@ let runLog = [];
 try {
   const rawLog = JSON.parse(localStorage.getItem(LOG_KEY) || 'null');
   if (Array.isArray(rawLog)) runLog = rawLog;
-} catch {}
+} catch { }
 
 // Render Avatar Picker in Game Over form
 const avPicker = $('avatar-picker');
@@ -159,7 +159,7 @@ function applyServerState(res) {
     board = res.board;
     if ((res.scope || lbScope) === 'today') {
       todayBoard = res.board;
-      try { localStorage.setItem(LB_KEY, JSON.stringify(todayBoard)); } catch {}
+      try { localStorage.setItem(LB_KEY, JSON.stringify(todayBoard)); } catch { }
     }
   }
   syncLeaderboardUI();
@@ -173,7 +173,7 @@ function syncLeaderboardUI() {
   const topScore = todayBoard[0]?.score || 0;
   if (topScore > demo.state.best) {
     demo.state.best = topScore;
-    try { localStorage.setItem('ticklock_best', String(topScore)); } catch {}
+    try { localStorage.setItem('ticklock_best', String(topScore)); } catch { }
   }
 
   const st = api.state.stats;
@@ -286,7 +286,7 @@ function commitRunScore(explicitName = '') {
     localStorage.setItem(LOG_KEY, JSON.stringify(runLog));
     localStorage.setItem(RUN_SEQ_KEY, String(runSeq));
     localStorage.setItem(LB_DATE_KEY, todayKey());
-  } catch {}
+  } catch { }
   api.submitRun(entry, lbScope).then(applyServerState);
 }
 
@@ -680,7 +680,7 @@ $('lb-reset').addEventListener('click', async () => {
     localStorage.setItem(RUN_SEQ_KEY, '0');
     localStorage.setItem('ticklock_best', '0');
     localStorage.setItem(LB_DATE_KEY, todayKey());
-  } catch {}
+  } catch { }
   syncLeaderboardUI();
 });
 
@@ -745,7 +745,7 @@ const DEFAULTS = {
 try {
   const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null');
   if (saved && typeof saved === 'object') stage.applyVisuals({ ...DEFAULTS, ...saved });
-} catch {}
+} catch { }
 
 function syncSettingsUI() {
   const v = stage.visuals;
@@ -768,7 +768,7 @@ function syncSettingsUI() {
 function saveVisuals(patch) {
   stage.applyVisuals(patch);
   syncSettingsUI();
-  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(stage.visuals)); } catch {}
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(stage.visuals)); } catch { }
 }
 syncSettingsUI();
 
@@ -794,7 +794,7 @@ $('sp-glow').addEventListener('input', (e) => saveVisuals({ glow: Number(e.targe
 $('sp-vig').addEventListener('input', (e) => saveVisuals({ vignette: Number(e.target.value) / 100 }));
 $('sp-particles').addEventListener('change', (e) => saveVisuals({ particles: e.target.checked }));
 $('sp-reset').addEventListener('click', () => {
-  try { localStorage.removeItem(SETTINGS_KEY); } catch {}
+  try { localStorage.removeItem(SETTINGS_KEY); } catch { }
   saveVisuals({ ...DEFAULTS });
 });
 
@@ -868,6 +868,9 @@ window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyF') { $('perf').hidden = !$('perf').hidden; return; }
     return;
   }
+  if (demo.state.mode === 'over' && $('gameover-panel').contains(document.activeElement) && document.activeElement !== $('btn-retry')) {
+    return;
+  }
   if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); demo.pick(); }
   else if (e.key === 'Shift') { input.keyBoost = true; syncBoost(); }
   else if (e.code === 'KeyP') setPaused(demo.togglePause());
@@ -915,13 +918,16 @@ window.addEventListener('pointermove', (e) => {
     stage.renderer.domElement.style.cursor = over ? 'pointer' : '';
     return;
   }
-  fx.setParallax((e.clientX / window.innerWidth) * 2 - 1, -((e.clientY / window.innerHeight) * 2 - 1));
+  fx.setParallax((e.clientX / stage.viewport.w) * 2 - 1, -((e.clientY / stage.viewport.h) * 2 - 1));
 });
 
 // Gamepad: A = pick, RB/RT = boost (browsers expose pads only after a button press)
 let padA = false;
 function pollPad() {
-  const pad = [...(navigator.getGamepads?.() || [])].find(Boolean);
+  const pads = navigator.getGamepads?.();
+  if (!pads) return;
+  let pad = null;
+  for (let i = 0; i < pads.length; i++) { if (pads[i]) { pad = pads[i]; break; } }
   if (!pad) return;
   const a = pad.buttons[0]?.pressed;
   if (a && !padA) primaryPress();
@@ -947,6 +953,10 @@ function adaptQuality(avgMs) {
   }
 }
 window.__ticklock = { state: demo.state, perf, stage, api };
+
+const titleEl = $('title-ui');
+const bannerEl = $('tutorial-banner');
+const perfEl = $('perf');
 
 let last = performance.now();
 function frame(now) {
@@ -977,29 +987,28 @@ function frame(now) {
   if (ds.mode !== s.mode) ds.mode = s.mode;
   if (ds.paused !== pausedStr) ds.paused = pausedStr;
   const menuUp = booted && s.mode === 'title' && phase === 'menu';
-  if ($('title-ui').hidden === menuUp) $('title-ui').hidden = !menuUp;
-  const banner = $('tutorial-banner');
+  if (titleEl.hidden === menuUp) titleEl.hidden = !menuUp;
   if (s.mode === 'play' && !s.paused && !cueLeaving) {
     if (!s.clockStarted) {
-      banner.hidden = false;
+      bannerEl.hidden = false;
       const html = 'Hit a <strong>gold zone</strong> to start the 30-second clock';
-      if (banner.innerHTML !== html) banner.innerHTML = html;
+      if (bannerEl.innerHTML !== html) bannerEl.innerHTML = html;
     } else if (s.hits < 3) {
-      banner.hidden = false;
+      bannerEl.hidden = false;
       const html = 'Hit the white centre for a <strong>perfect</strong>. Hold <strong>Shift</strong> to boost.';
-      if (banner.innerHTML !== html) banner.innerHTML = html;
+      if (bannerEl.innerHTML !== html) bannerEl.innerHTML = html;
     } else {
-      banner.hidden = true;
+      bannerEl.hidden = true;
     }
   } else {
-    banner.hidden = true;
+    bannerEl.hidden = true;
   }
 
   perf.frames++; perf.acc += raw * 1000;
   if (perf.acc >= 1000) {
     perf.avgMs = perf.acc / perf.frames;
     adaptQuality(perf.avgMs);
-    $('perf').textContent = `${(1000 / perf.avgMs).toFixed(0)} fps · ${perf.avgMs.toFixed(1)} ms · px ${perf.pixelRatio.toFixed(2)}`;
+    perfEl.textContent = `${(1000 / perf.avgMs).toFixed(0)} fps · ${perf.avgMs.toFixed(1)} ms · px ${perf.pixelRatio.toFixed(2)}`;
     perf.frames = 0; perf.acc = 0;
   }
   if (!booted && !bootHandoff) {

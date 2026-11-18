@@ -51,7 +51,7 @@ function slateTexture(size) {
 // The hub shows ~180 px tall on a 1080p screen, so 1.25x (640 px square) is still sharper than it is drawn;
 // at 2x it re-uploaded 4 MB to the GPU ten times a second while the clock ran.
 const HUB_SCALE = 1.25, MON_SCALE = 0.75;
-const MONITOR_HZ = 15;
+const MONITOR_HZ = 12;
 
 function makeScreen(mesh, w, h, maxAniso, SCALE) {
   const canvas = document.createElement('canvas');
@@ -90,7 +90,11 @@ export function createHud(parts, maxAniso = 8) {
   const scanTile = document.createElement('canvas'); scanTile.width = 4; scanTile.height = 3;
   { const g = scanTile.getContext('2d'); g.fillStyle = 'rgba(0,0,0,0.28)'; g.fillRect(0, 0, 4, 1); }
   const scanlines = mon.ctx.createPattern(scanTile, 'repeat');
-  const wave = new Float32Array(56);      // monitor waveform bars
+  const waveGradNorm = mon.ctx.createLinearGradient(0, 150, 0, 450);
+  waveGradNorm.addColorStop(0, C.magenta); waveGradNorm.addColorStop(1, C.blue);
+  const waveGradBoost = mon.ctx.createLinearGradient(0, 150, 0, 450);
+  waveGradBoost.addColorStop(0, C.blue); waveGradBoost.addColorStop(1, C.cyan || C.blue);
+  const wave = new Float32Array(36);      // monitor waveform bars
   let energy = 0;                         // spikes on hits
   let glitchT = 0;                        // monitor glitch on miss
   let card = null;                        // { title, sub, color, t, dur }
@@ -105,7 +109,7 @@ export function createHud(parts, maxAniso = 8) {
     if (evt === 'levelup') card = { title: `Level ${d.level}`, sub: '+2s', color: C.gold, t: 0, dur: 1.3 };
     if (evt === 'miss') { glitchT = 0.3; energy = 0; }
     if (evt === 'fatal') { glitchT = 0.45; card = { title: 'Locked out', sub: d.text || 'Time up', color: C.red, t: 0, dur: 0.9 }; }
-    if (evt === 'start' || evt === 'title') { card = null; glitchT = 0; }
+    if (evt === 'start' || evt === 'title' || evt === 'gameover') { card = null; glitchT = 0; }
   }
 
   // ---------- hub label (circle inscribed in the 512 square)
@@ -117,7 +121,6 @@ export function createHud(parts, maxAniso = 8) {
     ctx.drawImage(slate, 0, 0, W, W);
 
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0,0,0,0.65)'; ctx.shadowBlur = 3; ctx.shadowOffsetY = 2;
     const blink = Math.floor(clock * 2.2) % 2 === 0;
 
     if (s.mode === 'title') {
@@ -232,12 +235,10 @@ export function createHud(parts, maxAniso = 8) {
         wave[i] += (target - wave[i]) * Math.min(1, dt * 18);
       }
       const bw = (W - 120) / wave.length;
+      ctx.fillStyle = s.boost ? waveGradBoost : waveGradNorm;
       for (let i = 0; i < wave.length; i++) {
         const h = Math.min(1, wave[i]) * 300;
-        const grad = ctx.createLinearGradient(0, 300 - h / 2, 0, 300 + h / 2);
-        grad.addColorStop(0, s.boost ? C.blue : C.magenta); grad.addColorStop(1, C.blue);
-        ctx.fillStyle = grad;
-        ctx.fillRect(60 + i * bw + 2, 300 - h / 2, bw - 5, h);
+        ctx.fillRect(60 + i * bw + 3, 300 - h / 2, bw - 6, h);
       }
       ctx.font = `700 64px ${FONT}`;
       ctx.textAlign = 'left'; ctx.fillStyle = s.flow ? C.gold : s.combo > 0 ? C.magenta : C.faint;
@@ -265,15 +266,15 @@ export function createHud(parts, maxAniso = 8) {
       }
     }
 
-    // miss glitch: shifted slices + red tint
+    // miss glitch: lightweight scan-bar tears + red tint (no canvas self-blit)
     if (glitchT > 0) {
       glitchT -= dt;
-      for (let i = 0; i < 7; i++) {
-        const y = Math.random() * H, h = 10 + Math.random() * 50, dx = (Math.random() - 0.5) * 120;
-        // source rect is in real canvas pixels, destination in design units
-        ctx.drawImage(mon.canvas, 0, y * SCALE, W * SCALE, h * SCALE, dx, y, W, h);
-      }
       ctx.fillStyle = 'rgba(255,59,59,0.22)'; ctx.fillRect(0, 0, W, H);
+      for (let i = 0; i < 4; i++) {
+        const y = Math.random() * H, h = 8 + Math.random() * 28;
+        ctx.fillStyle = i % 2 ? 'rgba(255,90,70,0.34)' : 'rgba(14,20,36,0.65)';
+        ctx.fillRect(0, y, W, h);
+      }
       ctx.fillStyle = C.red; ctx.font = `900 110px ${FONT}`; ctx.textAlign = 'center';
       ctx.fillText('−1.2s', W / 2, 300);
     }

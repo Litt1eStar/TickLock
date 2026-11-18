@@ -45,14 +45,15 @@ const fragmentShader = /* glsl */`
 
   void main() {
     float r = length(vPos);
-    float th = atan(vPos.x, vPos.y);                       // clockwise from 12 o'clock
+    if (r < uRIn - 0.048 || r > uROut + 0.055) discard;
     float outerBound = smoothstep(uRIn - 0.048, uRIn - 0.038, r) * (1.0 - smoothstep(uROut + 0.045, uROut + 0.055, r));
     if (outerBound <= 0.0) discard;
 
+    float th = atan(vPos.x, vPos.y);                       // clockwise from 12 o'clock
     float band = smoothstep(uRIn, uRIn + 0.006, r) * (1.0 - smoothstep(uROut - 0.006, uROut, r));
     float rn = clamp((r - uRIn) / (uROut - uRIn), 0.0, 1.0);
     float radialEdge = smoothstep(0.0, 0.14, rn) * smoothstep(1.0, 0.86, rn);
-    float grooves = 0.90 + 0.10 * sin(r * 440.0);          // concentric vinyl micro-grooves
+    float grooves = band > 0.0 ? (0.90 + 0.10 * sin(r * 440.0)) : 1.0;          // concentric vinyl micro-grooves
     float bevel = (0.62 + 0.38 * radialEdge) * grooves;
     float aa = 0.0045 / r;                                 // crisp anti-aliased edge
     float line = 0.009 / r;
@@ -60,13 +61,15 @@ const fragmentShader = /* glsl */`
     vec3 col = vec3(0.0);
     float alpha = 0.0;
 
-    // Anisotropic vinyl butterfly sheen + subtle groove track on the band
-    float c1 = 0.5 + 0.5 * cos((th - 0.45) * 2.0);
-    float c2 = 0.5 + 0.5 * cos(th - uNeedle);
-    float anisoLobe = (c1 * c1) * (c1 * c1) * 0.65 + (c2 * c2 * c2) * (c2 * c2 * c2) * 0.85;
-    vec3 vinylSheen = mix(vec3(0.10, 0.11, 0.16), vec3(0.24, 0.21, 0.32), anisoLobe) * grooves;
-    col += vinylSheen * band * 0.42;
-    alpha = max(alpha, band * 0.38 * (0.35 + 0.65 * anisoLobe));
+    if (band > 0.0) {
+      // Anisotropic vinyl butterfly sheen + subtle groove track on the band
+      float c1 = 0.5 + 0.5 * cos((th - 0.45) * 2.0);
+      float c2 = 0.5 + 0.5 * cos(th - uNeedle);
+      float anisoLobe = (c1 * c1) * (c1 * c1) * 0.65 + (c2 * c2 * c2) * (c2 * c2 * c2) * 0.85;
+      vec3 vinylSheen = mix(vec3(0.10, 0.11, 0.16), vec3(0.24, 0.21, 0.32), anisoLobe) * grooves;
+      col += vinylSheen * band * 0.42;
+      alpha = max(alpha, band * 0.38 * (0.35 + 0.65 * anisoLobe));
+    }
 
     // 60 etched precision degree ticks on outer dial scale + 12 major ticks on inner hub scale
     float nearNeedle = exp(-abs(wrapA(th - uNeedle)) * 4.5);

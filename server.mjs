@@ -44,7 +44,7 @@ function mirrorToUpstream(route, body, authHeader = '') {
       ...(authHeader ? { Authorization: authHeader } : {}),
     },
     body: JSON.stringify(body),
-  }).catch(() => {});
+  }).catch(() => { });
 }
 
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
@@ -103,6 +103,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_runs_event ON runs(event_tag, score DESC);
   CREATE INDEX IF NOT EXISTS idx_runs_all ON runs(score DESC);
 `);
+db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(new Date().toISOString());
 
 const stmts = {
   getMeta: db.prepare('SELECT value FROM meta WHERE key = ?'),
@@ -645,7 +646,7 @@ server.listen(PORT, HOST, () => {
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => {
     server.close(() => {
-      try { db.close(); } catch {}
+      try { db.close(); } catch { }
       process.exit(0);
     });
   });

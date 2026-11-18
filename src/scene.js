@@ -209,6 +209,14 @@ export async function createStage(container, onProgress = () => {}) {
   if (missingOpt.length) console.warn('[TickLock] optional parts missing (lights fall back):', missingOpt);
 
   gltf.scene.updateMatrixWorld(true);
+  // Freeze world matrices for all static studio props so Three.js skips recalculating them every frame.
+  const DYNAMIC_PARTS = /^(Lock_Shackle|Speaker_Cone)$/;
+  gltf.scene.traverse((o) => {
+    if (!DYNAMIC_PARTS.test(o.name)) {
+      o.matrixAutoUpdate = false;
+      o.updateMatrix();
+    }
+  });
   if (parts.Lamp_Bulb) parts.Lamp_Bulb.getWorldPosition(lights.lamp.position);
   else lights.lamp.position.set(-2.2, 0.1, -0.8);
   if (parts.Sign_OnAir) { parts.Sign_OnAir.getWorldPosition(lights.sign.position); lights.sign.position.z += 0.5; }
@@ -250,12 +258,17 @@ export async function createStage(container, onProgress = () => {}) {
   const grade = { uniforms: { uRed: { value: 0 }, uVignette: { value: 0.45 } } };
 
   const rig = { offset: new THREE.Vector3(), shake: new THREE.Vector3(), targetOffset: new THREE.Vector3() };
+  const viewport = { w: window.innerWidth || 1280, h: window.innerHeight || 720 };
+  const vigEl = document.getElementById('vig-layer');
+  const missEl = document.getElementById('miss-layer');
   let basePr = MAX_PIXEL_RATIO;
   let maxBufW = MAX_BUFFER_W;
 
   function resize() {
     const w = container.clientWidth || window.innerWidth;
     const h = container.clientHeight || window.innerHeight;
+    viewport.w = w;
+    viewport.h = h;
     const aspect = w / h;
     camera.aspect = aspect;
     const tanV = Math.max(
@@ -297,8 +310,8 @@ export async function createStage(container, onProgress = () => {}) {
     );
     const vig = grade.uniforms.uVignette.value;
     const red = grade.uniforms.uRed.value;
-    if (Math.abs(vig - lastVig) > 0.01) { lastVig = vig; container.style.setProperty('--vig', vig.toFixed(2)); }
-    if (Math.abs(red - lastRed) > 0.01) { lastRed = red; container.style.setProperty('--red-tint', (red * 0.85).toFixed(2)); }
+    if (vigEl && Math.abs(vig - lastVig) > 0.03) { lastVig = vig; vigEl.style.opacity = vig.toFixed(2); }
+    if (missEl && (Math.abs(red - lastRed) > 0.03 || (red === 0 && lastRed !== 0))) { lastRed = red; missEl.style.opacity = (red * 0.85).toFixed(2); }
     renderer.render(scene, camera);
   }
 
@@ -309,7 +322,7 @@ export async function createStage(container, onProgress = () => {}) {
   }
 
   return {
-    renderer, scene, camera, grade, lights, parts, rig,
+    renderer, scene, camera, grade, lights, parts, rig, viewport,
     halos: { lamp: lampHalo, sign: signHalo },
     visuals, applyVisuals, render, resize, setPixelRatio,
     maxPixelRatio: MAX_PIXEL_RATIO,

@@ -18,6 +18,8 @@
 </head>
 <body>
   <div id="stage"></div>
+  <div id="vig-layer" aria-hidden="true"></div>
+  <div id="miss-layer" aria-hidden="true"></div>
 
   <!-- floating hit text, camera-flash and glitch layers -->
   <div id="floats"></div>
@@ -215,7 +217,7 @@
         <label class="sp-row">
           <span>Server connection <em id="acct-conn-status">Checking…</em></span>
           <div class="sf-row">
-            <input id="acct-server-url" class="acct-input" type="url" placeholder="Same server (or https://your-vps.com)" spellcheck="false">
+            <input id="acct-server-url" class="acct-input" type="url" placeholder="Same server (or https://ticklock.cmm.works)" spellcheck="false">
             <button id="acct-server-save" type="button">Connect</button>
           </div>
         </label>

@@ -12,7 +12,34 @@ const LEVELS = [ // [hits in level, speed rad/s, width degrees, zones, lifetime 
   [8, 3.05, 25, 5, 5.0, 0.24],
 ];
 const START_TIME = 30, HIT_TIME = 0.50, BLUE_TIME = 2, LEVEL_TIME = 2, MISS_TIME = 1.2;
-const ENDLESS_SPEED = 0.08, MIN_WINDOW = 0.12;          // endless: +0.08 rad/s per level; widen zones so window >= 120 ms
+const ENDLESS_SPEED = 0.08, MIN_WINDOW = 0.12;
+
+export const DIFFICULTIES = {
+  easy: {
+    id: 'easy', label: 'Easy',
+    speedMult: 0.90, widthMult: 1.12, lifeMult: 1.25, shrinkFloor: 0.65,
+    zoneGap: 0.12, maxCount: 5, driftFrom: 8, driftSpeed: 0.14,
+    startTime: 35, hitTime: 0.65, missTime: 0.9, scoreMult: 0.85,
+  },
+  normal: {
+    id: 'normal', label: 'Normal',
+    speedMult: 1.12, widthMult: 0.88, lifeMult: 0.92, shrinkFloor: 0.45,
+    zoneGap: 0.35, maxCount: 4, driftFrom: 5, driftSpeed: 0.24,
+    startTime: 30, hitTime: 0.50, missTime: 1.2, scoreMult: 1.00,
+  },
+  hard: {
+    id: 'hard', label: 'Hard',
+    speedMult: 1.28, widthMult: 0.74, lifeMult: 0.78, shrinkFloor: 0.35,
+    zoneGap: 0.55, maxCount: 3, driftFrom: 3, driftSpeed: 0.34,
+    startTime: 26, hitTime: 0.42, missTime: 1.6, scoreMult: 1.35,
+  },
+  muasoom: {
+    id: 'muasoom', label: 'Muasoom',
+    speedMult: 1.55, widthMult: 0.56, lifeMult: 0.60, shrinkFloor: 0.25,
+    zoneGap: 0.80, maxCount: 2, driftFrom: 2, driftSpeed: 0.48,
+    startTime: 22, hitTime: 0.34, missTime: 2.2, scoreMult: 1.85,
+  },
+};          // endless: +0.08 rad/s per level; widen zones so window >= 120 ms
 const BOOST_SPEED = 1.8, BOOST_SCORE = 2, PERFECT_CORE = 0.3, SPAWN_GAP = 0.7, BLINK = 0.8, BLUE_LIFE = 0.7;
 
 // Fun-to-fail & Flow State constants
@@ -28,7 +55,7 @@ const rad = (deg) => (deg * Math.PI) / 180;
 
 export function createGame(emit) {
   const s = {
-    mode: 'title', paused: false,
+    mode: 'title', paused: false, difficulty: 'normal',
     needleAngle: 0, dir: 1, boost: false, boostLatch: false,
     time: START_TIME, score: 0, combo: 0, maxCombo: 0, level: 1,
     hits: 0, levelHits: 0, levelGoal: LEVELS[0][0], perfects: 0, runTime: 0,
@@ -39,16 +66,38 @@ export function createGame(emit) {
     zones: [], overT: 0, retryReady: false,
   };
 
+  const diffSpec = () => DIFFICULTIES[s.difficulty] || DIFFICULTIES.normal;
+
+  function setDifficulty(id) {
+    s.difficulty = DIFFICULTIES[id] ? id : 'normal';
+    return s.difficulty;
+  }
+
   function levelSpec(lv = s.level) {
+    const d = diffSpec();
     if (lv <= LEVELS.length) {
       const [hitsReq, speed, widthDeg, count, life, blueChance] = LEVELS[lv - 1];
-      return { hitsReq, speed, widthRad: rad(widthDeg), count, life, blueChance };
+      return {
+        hitsReq,
+        speed: speed * d.speedMult,
+        widthRad: rad(widthDeg) * d.widthMult,
+        count: Math.min(count, d.maxCount),
+        life: life ? life * d.lifeMult : 0,
+        blueChance,
+      };
     }
     const base = LEVELS[LEVELS.length - 1];
     const extra = lv - LEVELS.length;
-    const speed = base[1] + extra * ENDLESS_SPEED;
-    const widthRad = Math.max(rad(base[2]), speed * MIN_WINDOW);
-    return { hitsReq: 8, speed, widthRad, count: base[3], life: base[4], blueChance: base[5] };
+    const speed = (base[1] + extra * ENDLESS_SPEED) * d.speedMult;
+    const widthRad = Math.max(rad(base[2]) * d.widthMult, speed * MIN_WINDOW * 0.85);
+    return {
+      hitsReq: 8,
+      speed,
+      widthRad,
+      count: Math.min(base[3], d.maxCount),
+      life: base[4] * d.lifeMult,
+      blueChance: base[5],
+    };
   }
 
   function spawnZone(forceKind) {
@@ -63,12 +112,13 @@ export function createGame(emit) {
         ? wrap(s.needleAngle + s.dir * (1.05 + Math.random() * 0.45 + half))
         : wrap(Math.random() * TAU);
       if (Math.abs(wrap(angle - s.needleAngle)) < SPAWN_GAP + half) continue;
-      if (s.zones.some((z) => Math.abs(wrap(angle - z.angle)) < z.baseHalf + half + 0.08)) continue;
+      if (s.zones.some((z) => Math.abs(wrap(angle - z.angle)) < z.baseHalf + half + diffSpec().zoneGap)) continue;
       const zl = kind === 'recovery'
         ? RECOVERY_LIFE
         : life ? (kind === 'blue' ? life * BLUE_LIFE : life) : 0;
-      const driftChance = s.level >= 8 ? 0.35 : s.level >= 7 ? 0.25 : 0;
-      const driftSpeed = (0.18 + Math.min(0.12, (s.level - 7) * 0.03)) * (Math.random() < 0.5 ? 1 : -1);
+      const d = diffSpec();
+      const driftChance = s.level >= d.driftFrom + 1 ? 0.45 : s.level >= d.driftFrom ? 0.30 : 0;
+      const driftSpeed = (d.driftSpeed + Math.min(0.16, Math.max(0, s.level - d.driftFrom) * 0.03)) * (Math.random() < 0.5 ? 1 : -1);
       const drift = kind !== 'recovery' && Math.random() < driftChance ? driftSpeed : 0;
       s.zones.push({ angle, half, baseHalf: half, kind, age: 0, life: zl, pop: 0, alpha: 1, drift });
       return;
@@ -84,8 +134,9 @@ export function createGame(emit) {
 
   function start() {
     const spec = levelSpec(1);
+    const d = diffSpec();
     Object.assign(s, {
-      mode: 'play', paused: false, time: START_TIME, score: 0, combo: 0, maxCombo: 0, level: 1,
+      mode: 'play', paused: false, time: d.startTime, score: 0, combo: 0, maxCombo: 0, level: 1,
       hits: 0, levelHits: 0, levelGoal: spec.hitsReq, perfects: 0, runTime: 0,
       dir: 1, flow: false, savedCombo: 0, jamT: 0, slowT: 0, missLockT: 0, clockStarted: false, freezeT: 0, fatalText: '',
       ghost: { angle: 0, alpha: 0 }, zones: [],
@@ -139,10 +190,11 @@ export function createGame(emit) {
     const enteredFlow = !s.flow && s.combo >= FLOW_COMBO;
     s.flow = s.combo >= FLOW_COMBO;
 
+    const d = diffSpec();
     const flowMult = s.flow ? FLOW_BONUS : 1;
-    const points = 100 * (1 + 0.1 * s.combo) * (perfect ? 2 : 1) * (s.boost ? BOOST_SCORE : 1) * flowMult;
+    const points = 100 * (1 + 0.1 * s.combo) * (perfect ? 2 : 1) * (s.boost ? BOOST_SCORE : 1) * flowMult * d.scoreMult;
     s.score += points;
-    if (!firstHit) s.time += HIT_TIME + (zone.kind === 'blue' ? BLUE_TIME : 0) + (wasRecovery ? MISS_TIME : 0);
+    if (!firstHit) s.time += d.hitTime + (zone.kind === 'blue' ? BLUE_TIME : 0) + (wasRecovery ? d.missTime : 0);
     s.dir *= -1;
     s.jamT = 0;
     s.slowT = 0;
@@ -308,14 +360,14 @@ export function createGame(emit) {
       z.pop = 1 - Math.pow(1 - z.pop, 3);
       if (z.drift) {
         const nextAngle = wrap(z.angle + z.drift * dt);
-        const blocked = s.zones.some((o) => o !== z && Math.abs(wrap(nextAngle - o.angle)) < z.baseHalf + o.baseHalf + 0.08);
+        const blocked = s.zones.some((o) => o !== z && Math.abs(wrap(nextAngle - o.angle)) < z.baseHalf + o.baseHalf + diffSpec().zoneGap);
         if (blocked) z.drift *= -1;
         else z.angle = nextAngle;
       }
       if (z.life) {
         const k = Math.min(1, z.age / z.life);
-        // Cap shrink at 60% of original size (70% for recovery) so mid-to-endgame zones stay fair
-        z.half = z.baseHalf * (1 - k * (z.kind === 'recovery' ? 0.30 : 0.40));
+        const minFrac = z.kind === 'recovery' ? 0.70 : diffSpec().shrinkFloor;
+        z.half = z.baseHalf * (1 - k * (1 - minFrac));
         const left = z.life - z.age;
         if (z.kind === 'recovery') {
           // Fast urgent pulse on the Recovery zone
@@ -334,5 +386,5 @@ export function createGame(emit) {
 
   function togglePause() { if (s.mode === 'play') s.paused = !s.paused; return s.paused; }
 
-  return { state: s, update, pick, start, toTitle, debugKey, togglePause };
+  return { state: s, update, pick, start, toTitle, debugKey, togglePause, setDifficulty };
 }

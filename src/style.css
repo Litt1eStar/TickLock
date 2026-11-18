@@ -1,4 +1,4 @@
-/* Hallmark · redesign: full (menu, boot, start cue, panels, modals) · scope: app (game UI) · genre: atmospheric · theme: the project's own (late-night studio: brass, cream, needle violet; Barlow Condensed) · signature: the needle's violet marks the selected choice and wipes away the start cue */
+/* Hallmark · redesign: full (menu, boot, start cue, panels, modals) · scope: app (game UI) · genre: atmospheric · theme: the project's own (late-night studio: brass, cream, needle violet; Barlow Condensed) · signature: the needle's violet marks the selected choice and wipes away the start cue · redesign: full (difficulty select as a stepped list with each level-1 target arc drawn to scale; leaderboard filters split into scope tabs and a difficulty bar) */
 /* critique: the lock is the hero, so the 2D layer is one wordmark, three choices and two quiet corner lines; panels and modals use flat dark studio slate with hairline brass rules and no cut-corner boxes */
 /* waive 29 (.cue-needle, .boot-needle): the glow is the needle's light, the same beam as the 3D needle, not a depth shadow */
 @font-face { font-family: "Barlow Condensed"; font-weight: 500; font-display: block; src: url("../vendor/fonts/barlow-condensed-latin-500-normal.woff2") format("woff2"); }
@@ -1074,6 +1074,121 @@ button:disabled, input:disabled, select:disabled { opacity: 0.45; cursor: not-al
   border-color: var(--brass);
   color: var(--brass);
 }
+/* Leaderboard: "when" as text tabs, "which difficulty" as its own segmented bar */
+.lb-toolbar .lb-tabs { gap: 20px; }
+.lb-toolbar .lb-tab {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 4px 0;
+  font: 600 17px var(--font);
+  color: var(--cream-dim);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.lb-toolbar .lb-tab:hover { color: var(--cream); border-color: var(--cream-line); }
+.lb-toolbar .lb-tab.active { background: none; color: var(--cream); border-color: var(--brass); }
+.lb-tab:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; transition: none; }
+
+.lb-filter {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+.lb-filter-label { font: 600 14px var(--font); color: var(--cream-muted); }
+.lb-diff-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--cream-line);
+  border-radius: 4px;
+  overflow: clip;
+}
+.lb-diff-tab {
+  background: var(--surface);
+  color: var(--cream-dim);
+  border: 0;
+  border-left: 1px solid var(--cream-line);
+  padding: 8px 12px;
+  font: 700 15px var(--font);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.lb-diff-tab:first-child { border-left: 0; }
+.lb-diff-tab:hover { color: var(--cream); background: var(--surface-row); }
+.lb-diff-tab:active { background: var(--brass-soft); }
+.lb-diff-tab:focus-visible { outline: 2px solid var(--brass); outline-offset: -2px; transition: none; }
+.lb-diff-tab.active { background: var(--violet-fill); color: var(--cream); box-shadow: inset 0 -2px 0 var(--violet); }
+.lb-diff-tab.lb-diff-muasoom.active { background: var(--red-fill); box-shadow: inset 0 -2px 0 var(--red); }
+@media (max-width: 520px) {
+  .lb-filter { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+}
+
+/* Difficulty select: four steps, each with its level-1 target arc drawn to scale */
+.modal-card.diff-card-modal { width: min(600px, 100%); }
+.diff-grid {
+  display: flex;
+  flex-direction: column;
+  margin-top: -16px;
+}
+.diff-opt {
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--cream-line);
+  box-shadow: inset 3px 0 0 transparent;
+  padding: 12px 16px 12px 16px;
+  font-family: var(--font);
+  color: var(--cream);
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+.diff-opt:hover { background: var(--surface-row); }
+.diff-opt:active { background: var(--brass-soft); }
+.diff-opt:focus-visible { outline: 2px solid var(--brass); outline-offset: -2px; transition: none; }
+.diff-opt.active { background: var(--violet-fill); box-shadow: inset 3px 0 0 var(--violet); }
+.diff-opt-muasoom.active { background: var(--red-fill); box-shadow: inset 3px 0 0 var(--red); }
+
+.diff-arc { display: block; }
+.diff-arc-ring { fill: none; stroke: var(--cream-line); stroke-width: 2; }
+.diff-arc-target { fill: none; stroke: var(--brass); stroke-width: 6; }
+.diff-arc-hub { fill: var(--cream-faint); }
+.diff-opt.active .diff-arc-hub { fill: var(--violet); }
+.diff-opt-muasoom.active .diff-arc-hub { fill: var(--cream); }
+.diff-arc-needle { stroke: var(--cream-faint); stroke-width: 2; stroke-linecap: round; }
+.diff-opt.active .diff-arc-needle { stroke: var(--violet); }
+.diff-opt-muasoom .diff-arc-target { stroke: var(--red); }
+.diff-opt-muasoom.active .diff-arc-needle { stroke: var(--cream); }
+
+.diff-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.diff-name { font: 700 24px/1.1 var(--font); color: var(--cream); overflow-wrap: break-word; }
+.diff-desc { font: 500 16px/1.35 var(--font); color: var(--cream-muted); }
+.diff-opt.active .diff-desc { color: var(--cream-mid); }
+.diff-facts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.diff-mult { font: 700 18px var(--font); color: var(--brass); }
+.diff-opt-muasoom .diff-mult { color: var(--red); }
+.diff-clock { font: 600 14px var(--font); color: var(--cream-dim); }
+@media (max-width: 520px) {
+  .diff-opt { grid-template-columns: 44px minmax(0, 1fr); gap: 12px; }
+  .diff-arc { width: 44px; height: 44px; }
+  .diff-facts { grid-column: 2; flex-direction: row; align-items: baseline; gap: 12px; }
+}
+.modal-foot button.btn-primary { flex: 0 0 auto; min-width: 180px; }
+@media (prefers-reduced-motion: reduce) {
+  .diff-opt, .lb-diff-tab, .lb-toolbar .lb-tab { transition: none; }
+}
+
 .lb-stats {
   margin: 0;
   font-size: 14px;
